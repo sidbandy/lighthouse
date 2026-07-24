@@ -69,3 +69,6 @@ select = ["E", "F", "I", "UP", "B"]
 # Fixtures are real markdown table rows; wrapping them would break the table.
 "tests/test_markdown_repo.py" = ["E501"]
 "tests/test_table_parser.py" = ["E501"]
+# Depends()/Query() in argument defaults is the FastAPI dependency-injection
+# idiom, not the mutable-default bug B008 exists to catch.
+"lighthouse/**/router.py" = ["B008"]

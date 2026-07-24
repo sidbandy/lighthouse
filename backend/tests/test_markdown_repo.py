@@ -242,7 +242,7 @@ class TestLayoutGuards:
         assert len(fetch_document(connector, THIN_TABLE)) == 2
 
     def test_unrecognised_columns_are_a_connector_error(self):
-        with pytest.raises(ConnectorError, match="could not locate company/role"):
+        with pytest.raises(ConnectorError, match="no table had recognisable company/role"):
             fetch_document(make_connector(), UNRECOGNISED_COLUMNS)
 
     def test_http_failure_is_wrapped_as_a_connector_error(self):
@@ -252,3 +252,46 @@ class TestLayoutGuards:
             respx.get(connector.url).mock(return_value=httpx.Response(404))
             with build_client() as client, pytest.raises(ConnectorError, match="fetch failed"):
                 connector.fetch(client)
+
+
+class TestMultiTableAttribution:
+    """These files really do contain several tables (active vs closed, or one
+    per category), and they need not share headers. Carrying either the column
+    map or the "same company as above" state across a boundary silently
+    attributes one company's roles to another."""
+
+    MULTI_TABLE = """
+| Company | Role | Location | Application/Link | Date Posted |
+| ------- | ---- | -------- | ---------------- | ----------- |
+| A Corp | SWE Intern | Austin, TX | <a href="https://a.com/j?gh_jid=111">Apply</a> | Jul 09 |
+| ↳ | Data Intern | Austin, TX | <a href="https://a.com/j?gh_jid=112">Apply</a> | Jul 09 |
+
+| Employer | Role | Location | Application/Link | Date Posted |
+| -------- | ---- | -------- | ---------------- | ----------- |
+| C Corp | Quant Intern | Chicago, IL | <a href="https://c.com/j?gh_jid=333">Apply</a> | Jul 08 |
+"""
+
+    def _fetch(self, body: str, min_rows: int = 1):
+        import respx
+        from httpx import Response
+
+        from lighthouse.ingest.base import build_client
+        from lighthouse.ingest.connectors.markdown_repo import MarkdownRepoConnector
+
+        connector = MarkdownRepoConnector(source_id="multi", repo="x/y", min_expected_rows=min_rows)
+        with respx.mock:
+            respx.get(connector.url).mock(return_value=Response(200, text=body))
+            with build_client() as client:
+                return connector.fetch(client)
+
+    def test_second_table_keeps_its_own_company(self):
+        """The regression: C Corp's role must not be attributed to A Corp."""
+        by_title = {p.title: p.company_name for p in self._fetch(self.MULTI_TABLE)}
+        assert by_title["Quant Intern"] == "C Corp"
+
+    def test_continuation_still_resolves_within_a_table(self):
+        by_title = {p.title: p.company_name for p in self._fetch(self.MULTI_TABLE)}
+        assert by_title["Data Intern"] == "A Corp"
+
+    def test_all_three_rows_survive(self):
+        assert len(self._fetch(self.MULTI_TABLE)) == 3

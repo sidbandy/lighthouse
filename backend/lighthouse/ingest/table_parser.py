@@ -42,11 +42,18 @@ CONTINUATION_MARKERS = ("↳", "â³", "&#8627;", "↳")
 
 @dataclass
 class ParsedRow:
-    """One table row, already cleaned and column-mapped."""
+    """One table row, already cleaned and column-mapped.
+
+    ``table_index`` matters: a document often holds several tables (active vs
+    closed roles, or one per category) and they do not have to share headers.
+    Consumers must resolve column names per table, and must not carry state
+    such as "same company as above" across a table boundary.
+    """
 
     cells: dict[str, str]
     links: dict[str, list[str]]
     raw_line: str
+    table_index: int = 0
 
     def get(self, column: str, default: str = "") -> str:
         return self.cells.get(column, default)
@@ -147,6 +154,13 @@ def parse_tables(markdown: str, *, min_columns: int = 3) -> ParseResult:
 
         cells = _split_cells(stripped)
         if len(cells) < min_columns:
+            # Inside a table this is a degraded row, and ``skipped`` is the
+            # only signal that a file is rotting -- so it must be counted, not
+            # silently dropped. A stray pipe in prose also ends the table.
+            if in_table:
+                result.skipped += 1
+                in_table = False
+                headers = []
             continue
 
         if not in_table:
@@ -180,6 +194,13 @@ def parse_tables(markdown: str, *, min_columns: int = 3) -> ParseResult:
                 links[header] = found
 
         if mapped:
-            result.rows.append(ParsedRow(cells=mapped, links=links, raw_line=stripped))
+            result.rows.append(
+                ParsedRow(
+                    cells=mapped,
+                    links=links,
+                    raw_line=stripped,
+                    table_index=result.tables_found - 1,
+                )
+            )
 
     return result

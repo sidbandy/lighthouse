@@ -140,21 +140,31 @@ class MarkdownRepoConnector(Connector):
             raise ConnectorError(f"{self.source_id}: no table rows found (layout may have changed)")
 
         today = datetime.now(UTC).date()
-        keys = list(parsed.rows[0].cells)
-        company_key = _first_key(keys, _COMPANY_KEYS)
-        role_key = _first_key(keys, _ROLE_KEYS)
-        if not company_key or not role_key:
-            raise ConnectorError(
-                f"{self.source_id}: could not locate company/role columns in {keys}"
-            )
-        location_key = _first_key(keys, _LOCATION_KEYS)
-        link_key = _first_key(keys, _LINK_KEYS)
-        date_key = _first_key(keys, _DATE_KEYS)
-
         postings: list[RawPosting] = []
         last_company = ""
+        current_table = -1
+        columns: dict[str, str | None] = {}
+        usable_tables = 0
 
         for row in parsed.rows:
+            # Tables in one document need not share headers, and "same company
+            # as above" must never leak across a boundary -- doing so silently
+            # attributes one company's roles to another.
+            if row.table_index != current_table:
+                current_table = row.table_index
+                last_company = ""
+                columns = self._resolve_columns(list(row.cells))
+                usable_tables += int(columns is not None and bool(columns.get("company")))
+
+            if not columns.get("company") or not columns.get("role"):
+                continue
+
+            company_key = columns["company"]
+            role_key = columns["role"]
+            location_key = columns["location"]
+            link_key = columns["link"]
+            date_key = columns["date"]
+
             company_cell = row.get(company_key)
             if is_continuation(company_cell):
                 company = last_company
@@ -200,12 +210,28 @@ class MarkdownRepoConnector(Connector):
             if posting.is_valid():
                 postings.append(posting)
 
+        if usable_tables == 0:
+            raise ConnectorError(
+                f"{self.source_id}: no table had recognisable company/role columns "
+                f"(headers seen: {parsed.headers})"
+            )
         if len(postings) < self.min_expected_rows:
             raise ConnectorError(
                 f"{self.source_id}: only {len(postings)} usable rows from "
                 f"{len(parsed.rows)} parsed (layout may have changed)"
             )
         return postings
+
+    @staticmethod
+    def _resolve_columns(keys: list[str]) -> dict[str, str | None]:
+        """Map one table's headers onto the fields we need."""
+        return {
+            "company": _first_key(keys, _COMPANY_KEYS),
+            "role": _first_key(keys, _ROLE_KEYS),
+            "location": _first_key(keys, _LOCATION_KEYS),
+            "link": _first_key(keys, _LINK_KEYS),
+            "date": _first_key(keys, _DATE_KEYS),
+        }
 
     @staticmethod
     def _resolve_url(row, link_key: str | None, role_key: str, company_key: str) -> str | None:
