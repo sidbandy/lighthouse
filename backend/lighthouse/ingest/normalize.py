@@ -68,8 +68,10 @@ _PUNCT_RE = re.compile(r"[^\w\s]")
 _WS_RE = re.compile(r"\s+")
 
 # Noise that appears in scraped titles but does not distinguish a role.
+# Note this runs *after* punctuation has been stripped, so hyphenated forms
+# have already become spaced ones: "co-op" arrives here as "co op".
 _TITLE_NOISE_RE = re.compile(
-    r"\b(20\d{2}|summer|fall|autumn|winter|spring|intern(ship)?s?|co-?op|"
+    r"\b(20\d{2}|summer|fall|autumn|winter|spring|intern(ship)?s?|co[\s-]?op|"
     r"student|program|programme|new\s*grad(uate)?|entry\s*level|university|campus)\b",
     re.IGNORECASE,
 )
@@ -196,11 +198,46 @@ def canonical_url(url: str) -> str:
     return urlunsplit((parts.scheme.lower(), netloc, path, urlencode(kept), ""))
 
 
+# Trailing noise on a location cell. "+29" is how several feeds indicate
+# additional sites; left in place it blocks state extraction, so the same city
+# from two feeds fails to merge and the operator sees the city listed twice.
+_LOCATION_NOISE_RE = re.compile(
+    r"\s*(?:\+\s*\d+(?:\s*more)?|\((?:hybrid|remote|onsite|on-site)\)|\bhybrid\b)\s*$",
+    re.IGNORECASE,
+)
+
+# Shorthands these repos use constantly, plus the names that are both a city
+# and a state. A bare "New York" on a job posting means the city essentially
+# always, and reading it as the state leaves the entry with no city -- which
+# stops it merging with "New York, NY" from another feed.
+_CITY_ALIASES: dict[str, tuple[str, str]] = {
+    "nyc": ("New York", "NY"),
+    "new york city": ("New York", "NY"),
+    "new york": ("New York", "NY"),
+    "sf": ("San Francisco", "CA"),
+    "san francisco bay area": ("San Francisco", "CA"),
+    "bay area": ("San Francisco", "CA"),
+    "la": ("Los Angeles", "CA"),
+    "dc": ("Washington", "DC"),
+    "washington dc": ("Washington", "DC"),
+}
+
+_STATE_ABBREVS: frozenset[str] = frozenset(_US_STATES.values())
+
+
+def _match_state(text: str) -> str | None:
+    cleaned = _LOCATION_NOISE_RE.sub("", text).strip().rstrip(".")
+    if re.fullmatch(r"[A-Za-z]{2}", cleaned) and cleaned.upper() in _STATE_ABBREVS:
+        return cleaned.upper()
+    return _US_STATES.get(cleaned.lower())
+
+
 def parse_location(raw: str) -> dict:
     """Parse a location string into ``{city, state, raw, is_remote}``.
 
-    Feeds write locations every possible way; this keeps the original text so
-    nothing is lost, and adds structure where it can be recovered.
+    Feeds write locations every possible way. The original text is kept so
+    nothing is lost, and structure is recovered where possible -- which is what
+    lets the same city arriving from three feeds collapse into one entry.
     """
     text = _WS_RE.sub(" ", (raw or "").strip())
     if not text:
@@ -212,19 +249,19 @@ def parse_location(raw: str) -> dict:
 
     parts = [p.strip() for p in text.split(",") if p.strip()]
     if len(parts) >= 2:
-        city = parts[0]
-        tail = parts[1].strip()
-        if re.fullmatch(r"[A-Za-z]{2}", tail):
-            state = tail.upper()
-        else:
-            state = _US_STATES.get(tail.lower())
-            if state is None and tail.lower() in {v.lower() for v in _US_STATES.values()}:
-                state = tail.upper()
+        city = _LOCATION_NOISE_RE.sub("", parts[0]).strip() or None
+        state = _match_state(parts[1])
     elif len(parts) == 1 and not is_remote:
-        single = parts[0]
-        state = _US_STATES.get(single.lower())
-        if state is None:
-            city = single
+        single = _LOCATION_NOISE_RE.sub("", parts[0]).strip()
+        if alias := _CITY_ALIASES.get(single.lower()):
+            city, state = alias
+        elif matched := _match_state(single):
+            state = matched
+        else:
+            city = single or None
+
+    if city and (alias := _CITY_ALIASES.get(city.lower())):
+        city, state = alias[0], state or alias[1]
 
     return {"city": city, "state": state, "raw": text, "is_remote": is_remote}
 

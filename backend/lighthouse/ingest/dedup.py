@@ -120,12 +120,21 @@ class MergedPosting:
         merged: dict[str, dict] = {}
         for member in self.members:
             for loc in member.locations:
-                key = (
-                    f"{loc.get('city') or ''}|{loc.get('state') or ''}".lower()
-                    or (loc.get("raw") or "").lower()
-                )
-                if key not in merged or len(loc.get("raw", "")) > len(merged[key].get("raw", "")):
-                    merged[key] = loc
+                # Key on the city alone so a bare "Chicago" and a fully
+                # qualified "Chicago, IL" reconcile into one entry rather than
+                # listing the same office twice.
+                city = (loc.get("city") or "").strip().lower()
+                key = city or f"remote|{loc.get('is_remote')}" or (loc.get("raw") or "").lower()
+
+                current = merged.get(key)
+                if current is None:
+                    merged[key] = dict(loc)
+                    continue
+                # Keep whichever entry knows more: a state beats no state.
+                if loc.get("state") and not current.get("state"):
+                    merged[key] = dict(loc)
+                elif loc.get("is_remote"):
+                    current["is_remote"] = True
         return list(merged.values())
 
     @property

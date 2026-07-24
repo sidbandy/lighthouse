@@ -17,7 +17,15 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..core.models import Company, Posting, PostingSource, Season, SourceHealth
 from ..ingest.seasons import Cycle, applyable_cycles
-from .schemas import CycleCount, PostingDetail, PostingSummary, SourceSighting
+from .ghost import assess
+from .schemas import (
+    CycleCount,
+    GhostAssessmentOut,
+    GhostSignalOut,
+    PostingDetail,
+    PostingSummary,
+    SourceSighting,
+)
 
 
 @dataclass(slots=True)
@@ -178,8 +186,17 @@ def get_posting(session: Session, posting_id, today: date | None = None) -> Post
         return None
 
     summary = _to_summary(posting, today)
+    assessment = assess(posting, source_count=summary.source_count, today=today)
     return PostingDetail(
         **summary.model_dump(),
+        ghost=GhostAssessmentOut(
+            label=assessment.label.value,
+            summary=assessment.summary,
+            signals=[
+                GhostSignalOut(name=s.name, verdict=s.verdict.value, detail=s.detail)
+                for s in assessment.signals
+            ],
+        ),
         description=posting.description,
         ats_vendor=posting.company.ats_vendor,
         ats_job_id=posting.ats_job_id,

@@ -69,8 +69,26 @@ class PostingSummary(BaseModel):
     source_count: int = 0
 
 
+class GhostSignalOut(BaseModel):
+    """One checked fact, with the observation that produced it."""
+
+    name: str
+    verdict: str
+    detail: str
+
+
+class GhostAssessmentOut(BaseModel):
+    """A checklist, never a score. The label is derived from the signals and
+    always travels with them so the operator can judge for themselves."""
+
+    label: str
+    summary: str
+    signals: list[GhostSignalOut]
+
+
 class PostingDetail(PostingSummary):
     description: str | None = None
+    ghost: GhostAssessmentOut | None = None
     ats_vendor: str | None = None
     ats_job_id: str | None = None
     sources: list[SourceSighting] = []

@@ -17,7 +17,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
 from ..core.models import Company, Posting, PostingSource, SourceHealth
@@ -205,29 +205,40 @@ def persist(session: Session, merged_postings: list[MergedPosting], today: date)
 def _record_sources(session: Session, posting: Posting, merged: MergedPosting) -> None:
     """Attach provenance rows, one per source sighting.
 
-    The fingerprint makes this idempotent: re-ingesting an unchanged row does
-    nothing, so provenance does not accumulate duplicates across runs.
+    A raw upstream row is one sighting and belongs to exactly one posting,
+    which is what ``uq_source_fingerprint`` enforces. The lookup is therefore
+    global rather than per-posting: whenever dedup regroups a row onto a
+    different canonical posting -- which happens any time matching improves --
+    the existing sighting is re-pointed rather than inserted a second time.
     """
+    if not merged.members:
+        return
+
+    keys = {(m.source_id, m.fingerprint) for m in merged.members}
     existing = {
-        (s.source_id, s.source_fingerprint)
+        (s.source_id, s.source_fingerprint): s
         for s in session.scalars(
-            select(PostingSource).where(PostingSource.posting_id == posting.id)
-        )
-    }
-    for member in merged.members:
-        key = (member.source_id, member.fingerprint)
-        if key in existing:
-            continue
-        session.add(
-            PostingSource(
-                posting_id=posting.id,
-                source_id=member.source_id,
-                source_url=member.url,
-                source_fingerprint=member.fingerprint,
-                raw=member.raw,
+            select(PostingSource).where(
+                tuple_(PostingSource.source_id, PostingSource.source_fingerprint).in_(keys)
             )
         )
-        existing.add(key)
+    }
+
+    for member in merged.members:
+        sighting = existing.get((member.source_id, member.fingerprint))
+        if sighting is None:
+            session.add(
+                PostingSource(
+                    posting_id=posting.id,
+                    source_id=member.source_id,
+                    source_url=member.url,
+                    source_fingerprint=member.fingerprint,
+                    raw=member.raw,
+                )
+            )
+        elif sighting.posting_id != posting.id:
+            sighting.posting_id = posting.id
+            sighting.source_url = member.url
 
 
 def run_ingest(
