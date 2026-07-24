@@ -21,6 +21,7 @@ from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
 from ..core.models import Company, Posting, PostingSource, SourceHealth
+from .ats_targets import ats_connectors
 from .base import Connector, RawPosting, build_client
 from .dedup import MergedPosting, dedup_stats, deduplicate
 from .normalize import classify_employment_type, classify_role_family, parse_sponsorship
@@ -254,7 +255,12 @@ def run_ingest(
     complete usable list; higher tiers add breadth at the cost of time.
     """
     today = today or datetime.now(UTC).date()
-    connectors = connectors if connectors is not None else connectors_by_tier(max_tier)
+    if connectors is None:
+        connectors = connectors_by_tier(max_tier)
+        if max_tier >= 3:
+            # Tier 3 is per company, so its targets depend on what earlier
+            # tiers have already surfaced.
+            connectors = connectors + ats_connectors(session)
 
     all_rows: list[RawPosting] = []
     results: list[SourceResult] = []

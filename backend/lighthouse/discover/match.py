@@ -37,10 +37,32 @@ BM25_B = 0.75
 # their own they evidence nothing.
 _GENERIC_PHRASE_WORDS: frozenset[str] = frozenset(
     {
-        "systems", "system", "learning", "management", "development", "engineering",
-        "design", "programming", "computing", "processing", "analysis", "science",
-        "structures", "testing", "integration", "control", "performance", "methods",
-        "models", "end", "stack", "time", "oriented", "as", "code", "review",
+        "systems",
+        "system",
+        "learning",
+        "management",
+        "development",
+        "engineering",
+        "design",
+        "programming",
+        "computing",
+        "processing",
+        "analysis",
+        "science",
+        "structures",
+        "testing",
+        "integration",
+        "control",
+        "performance",
+        "methods",
+        "models",
+        "end",
+        "stack",
+        "time",
+        "oriented",
+        "as",
+        "code",
+        "review",
     }
 )
 
@@ -90,26 +112,44 @@ class MatchResult:
     """A posting scored against the corpus, with the evidence attached."""
 
     score: int
+    # BM25 total. Not displayed -- it breaks ties between postings with equal
+    # coverage by favouring the one matching on rarer terms.
+    rarity: float = 0.0
     matched: list[TermMatch] = field(default_factory=list)
     gaps: list[TermMatch] = field(default_factory=list)
     wording: list[TermMatch] = field(default_factory=list)
     description_available: bool = True
+    # How many signal terms the score was computed from. A coverage figure
+    # derived from two terms is arithmetically fine and practically
+    # meaningless, so the count travels with it.
+    terms_considered: int = 0
 
     @property
     def core_gaps(self) -> list[TermMatch]:
         """Missing terms the posting leans on hardest. The actionable list."""
         return [t for t in self.gaps if t.posting_count >= IMPORTANT_THRESHOLD]
 
+    # Below this, the score is reported but flagged: it is a ratio over too
+    # small a base to mean anything.
+    MIN_RELIABLE_TERMS = 6
+
+    @property
+    def is_thin_evidence(self) -> bool:
+        return self.terms_considered < self.MIN_RELIABLE_TERMS
+
     @property
     def evidence_basis(self) -> str:
         """How much the score is worth, stated plainly.
 
         A match computed from a title alone is much weaker evidence than one
-        computed from a full description, and the UI must be able to say so.
+        computed from a full description, and a coverage ratio over a handful
+        of terms is weaker still. The UI must be able to say both.
         """
         if not self.description_available:
             return "title only - weak evidence"
-        return "full description"
+        if self.is_thin_evidence:
+            return f"only {self.terms_considered} comparable terms - weak evidence"
+        return f"full description, {self.terms_considered} terms compared"
 
     def summary(self) -> str:
         if not self.matched and not self.gaps:
@@ -139,9 +179,7 @@ class CorpusIndex:
 
         self.combined: TermProfile = profile(" \n ".join(documents))
         self.avg_length = (
-            sum(d.total_terms for d in self.documents) / self.doc_count
-            if self.doc_count
-            else 0.0
+            sum(d.total_terms for d in self.documents) / self.doc_count if self.doc_count else 0.0
         )
         # Document frequency drives rarity weighting.
         self.doc_freq: dict[str, int] = {}
@@ -200,9 +238,7 @@ def _bm25(posting: TermProfile, index: CorpusIndex) -> float:
         return 0.0
 
     length_norm = (
-        1 - BM25_B + BM25_B * (posting.total_terms / index.avg_length)
-        if index.avg_length
-        else 1.0
+        1 - BM25_B + BM25_B * (posting.total_terms / index.avg_length) if index.avg_length else 1.0
     )
 
     total = 0.0
@@ -217,18 +253,41 @@ def _bm25(posting: TermProfile, index: CorpusIndex) -> float:
     return total
 
 
-def _normalize(raw: float, posting: TermProfile) -> int:
-    """Map a raw BM25 total onto 0-100.
+def _term_weight(term: str, posting_count: int) -> float:
+    """How much a term counts toward the score.
 
-    BM25 is unbounded, so the ceiling is derived from how much there was to
-    match on: a short title cannot reach the same raw total as a full
-    description, and scoring it against a fixed constant would make every
-    title-only posting look poor.
+    Repetition matters up to a point (the author saying "Kubernetes" five times
+    means more than twice, but twenty times means no more than five), and
+    technical vocabulary says more about fit than general English.
     """
-    if raw <= 0:
+    weight = float(min(posting_count, CORE_THRESHOLD))
+    return weight * 1.5 if is_technical(term) else weight
+
+
+def coverage_score(entries: list[TermMatch]) -> int:
+    """Share of what the posting emphasises that the corpus can evidence.
+
+    This *is* the score -- not a normalised BM25 total, which would be an
+    arbitrary number scaled by an arbitrary constant. Coverage is directly
+    interpretable ("you can evidence 40% of what this posting stresses"), it
+    is reconstructable from the term lists shown alongside it, and it does not
+    punish a posting merely for having a long description.
+
+    Terms the operator has under different wording count as half credit: the
+    experience is real, but a reader has to make the leap.
+    """
+    total = 0.0
+    earned = 0.0
+    for entry in entries:
+        weight = _term_weight(entry.term, entry.posting_count)
+        total += weight
+        if entry.matched:
+            earned += weight
+        elif entry.is_wording_mismatch:
+            earned += weight * 0.5
+    if total <= 0:
         return 0
-    ceiling = max(8.0, math.sqrt(max(posting.total_terms, 1)) * 6.0)
-    return max(0, min(100, round(100 * raw / (raw + ceiling))))
+    return max(0, min(100, round(100 * earned / total)))
 
 
 def build_index(documents: list[str]) -> CorpusIndex:
@@ -250,12 +309,10 @@ def match(
     text = f"{title}\n{description}" if description else title
     posting = profile(text)
 
-    raw = _bm25(posting, index)
-    score = _normalize(raw, posting)
-
     matched: list[TermMatch] = []
     gaps: list[TermMatch] = []
     wording: list[TermMatch] = []
+    considered: list[TermMatch] = []
 
     for term, posting_count in posting.counts.most_common():
         technical = is_technical(term)
@@ -275,6 +332,7 @@ def match(
             is_technical=technical,
             component_evidence=index.component_evidence(term),
         )
+        considered.append(entry)
         if entry.matched:
             matched.append(entry)
         elif entry.is_wording_mismatch:
@@ -283,7 +341,9 @@ def match(
             gaps.append(entry)
 
     return MatchResult(
-        score=score,
+        score=coverage_score(considered),
+        rarity=round(_bm25(posting, index), 2),
+        terms_considered=len(considered),
         matched=matched[:max_terms],
         gaps=gaps[:max_terms],
         wording=wording[:max_terms],

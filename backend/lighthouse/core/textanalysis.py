@@ -101,23 +101,66 @@ TECH_TERMS: frozenset[str] = frozenset(
 # systems" six times is asking for something quite specific, and splitting it
 # into "distributed" + "systems" loses that.
 TECH_PHRASES: tuple[str, ...] = (
-    "machine learning", "deep learning", "reinforcement learning", "computer vision",
-    "natural language processing", "large language models", "generative ai",
-    "distributed systems", "operating systems", "computer architecture",
-    "data structures", "data engineering", "data science", "data pipeline",
-    "software engineering", "software development", "web development",
-    "full stack", "front end", "back end", "backend development", "frontend development",
-    "system design", "systems design", "object oriented", "functional programming",
-    "version control", "unit testing", "integration testing", "test automation",
-    "continuous integration", "continuous deployment", "code review",
-    "cloud computing", "cloud infrastructure", "infrastructure as code",
-    "high frequency trading", "quantitative research", "quantitative trading",
-    "market making", "risk management", "time series", "signal processing",
-    "embedded systems", "real time", "low latency", "high performance",
-    "linear algebra", "discrete mathematics", "numerical methods",
-    "database design", "query optimisation", "query optimization",
-    "network security", "information security", "threat modeling", "threat modelling",
-    "product management", "user experience", "technical writing",
+    "machine learning",
+    "deep learning",
+    "reinforcement learning",
+    "computer vision",
+    "natural language processing",
+    "large language models",
+    "generative ai",
+    "distributed systems",
+    "operating systems",
+    "computer architecture",
+    "data structures",
+    "data engineering",
+    "data science",
+    "data pipeline",
+    "software engineering",
+    "software development",
+    "web development",
+    "full stack",
+    "front end",
+    "back end",
+    "backend development",
+    "frontend development",
+    "system design",
+    "systems design",
+    "object oriented",
+    "functional programming",
+    "version control",
+    "unit testing",
+    "integration testing",
+    "test automation",
+    "continuous integration",
+    "continuous deployment",
+    "code review",
+    "cloud computing",
+    "cloud infrastructure",
+    "infrastructure as code",
+    "high frequency trading",
+    "quantitative research",
+    "quantitative trading",
+    "market making",
+    "risk management",
+    "time series",
+    "signal processing",
+    "embedded systems",
+    "real time",
+    "low latency",
+    "high performance",
+    "linear algebra",
+    "discrete mathematics",
+    "numerical methods",
+    "database design",
+    "query optimisation",
+    "query optimization",
+    "network security",
+    "information security",
+    "threat modeling",
+    "threat modelling",
+    "product management",
+    "user experience",
+    "technical writing",
 )
 
 _PHRASE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
@@ -129,11 +172,24 @@ _PHRASE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
 # text -- it turns "kubernetes" into "kubernet" -- so this stays conservative
 # and only strips inflections that genuinely matter here.
 _SUFFIXES: tuple[tuple[str, str], ...] = (
-    ("ization", "ize"), ("isation", "ize"), ("ations", "ate"), ("ation", "ate"),
-    ("ements", "ement"), ("ingly", ""), ("edly", ""),
-    ("ements", "ement"), ("ments", "ment"),
-    ("ities", "ity"), ("ives", "ive"), ("ing", ""), ("ers", "er"), ("ies", "y"),
-    ("ied", "y"), ("ed", ""), ("es", ""), ("s", ""),
+    ("ization", "ize"),
+    ("isation", "ize"),
+    ("ations", "ate"),
+    ("ation", "ate"),
+    ("ements", "ement"),
+    ("ingly", ""),
+    ("edly", ""),
+    ("ements", "ement"),
+    ("ments", "ment"),
+    ("ities", "ity"),
+    ("ives", "ive"),
+    ("ing", ""),
+    ("ers", "er"),
+    ("ies", "y"),
+    ("ied", "y"),
+    ("ed", ""),
+    ("es", ""),
+    ("s", ""),
 )
 
 # Words that must never be stemmed: doing so would break a technical name.
@@ -155,9 +211,7 @@ def stem(word: str) -> str:
     return lowered
 
 
-def tokenize_with_surface(
-    text: str, *, keep_stopwords: bool = False
-) -> list[tuple[str, str]]:
+def tokenize_with_surface(text: str, *, keep_stopwords: bool = False) -> list[tuple[str, str]]:
     """Tokenise, returning ``(stem, surface_form)`` pairs.
 
     The surface form is kept because the stem is a comparison key, not
