@@ -1,0 +1,37 @@
+# Deploy-readiness only. The primary development path is a locally installed
+# Postgres 16 (Homebrew) plus `make dev` against the repo venv -- see README.md.
+# This file exists so the same stack can be brought up on a server later; the
+# `api` service expects a backend/Dockerfile that is not part of local dev.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: lighthouse
+      POSTGRES_USER: lighthouse
+      POSTGRES_PASSWORD: lighthouse
+    volumes:
+      - lighthouse-db:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lighthouse -d lighthouse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+    command: uvicorn lighthouse.api:app --host 0.0.0.0 --port 8000
+    environment:
+      LIGHTHOUSE_DATABASE_URL: postgresql+psycopg://lighthouse:lighthouse@db:5432/lighthouse
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  lighthouse-db:
