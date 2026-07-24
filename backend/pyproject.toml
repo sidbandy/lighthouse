@@ -64,3 +64,8 @@ extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Fixtures are real markdown table rows; wrapping them would break the table.
+"tests/test_markdown_repo.py" = ["E501"]
+"tests/test_table_parser.py" = ["E501"]
