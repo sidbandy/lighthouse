@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 
 from ..core.db import get_session
 from ..core.models import EmploymentType, RoleFamily, Season, Sponsorship
-from . import service
-from .schemas import CycleCount, PostingDetail, PostingPage, SourceHealthOut
+from . import ranking, service
+from .schemas import CycleCount, LaneBucketOut, PostingDetail, PostingPage, SourceHealthOut
 
 router = APIRouter(prefix="/api", tags=["discover"])
 
@@ -64,6 +64,36 @@ def list_postings(
     )
     items, total = service.list_postings(session, filters, today)
     return PostingPage(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/discover", response_model=list[LaneBucketOut])
+def discover(
+    session: Session = Depends(get_session),
+    season: list[Season] = Query(default=[]),
+    role_family: list[RoleFamily] = Query(default=[]),
+    sponsorship: list[Sponsorship] = Query(default=[]),
+    state: list[str] = Query(default=[]),
+    with_description_only: bool = Query(
+        default=False,
+        description="Only postings carrying a description, so match scores rest on real evidence.",
+    ),
+    per_lane: int = Query(default=15, ge=1, le=50),
+    today: date | None = None,
+) -> list[LaneBucketOut]:
+    """The three-lane view: reach / target / safety, scored against the corpus.
+
+    This is the headline Discover surface. With an empty corpus every score is
+    0 and the lanes fall back to selectivity alone.
+    """
+    filters = service.PostingFilters(
+        seasons=season,
+        role_families=[r.value for r in role_family],
+        sponsorship=[s.value for s in sponsorship],
+        states=state,
+        with_description_only=with_description_only,
+    )
+    buckets = ranking.three_lane_view(session, filters, per_lane=per_lane, today=today)
+    return ranking.lane_view_to_out(buckets)
 
 
 @router.get("/postings/{posting_id}", response_model=PostingDetail)

@@ -187,8 +187,13 @@ def get_posting(session: Session, posting_id, today: date | None = None) -> Post
 
     summary = _to_summary(posting, today)
     assessment = assess(posting, source_count=summary.source_count, today=today)
+    # Imported here rather than at module load to avoid a cycle: ranking imports
+    # the schemas this module also builds.
+    from .ranking import match_for_posting
+
     return PostingDetail(
         **summary.model_dump(),
+        match=match_for_posting(session, posting),
         ghost=GhostAssessmentOut(
             label=assessment.label.value,
             summary=assessment.summary,

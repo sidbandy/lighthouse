@@ -82,6 +82,40 @@ def cmd_postings(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_discover(args: argparse.Namespace) -> int:
+    from .discover import ranking
+
+    filters = service.PostingFilters(
+        seasons=[Season(args.season)] if args.season else [],
+        role_families=[args.role] if args.role else [],
+        states=args.state or [],
+        with_description_only=not args.include_title_only,
+    )
+    with session_scope() as session:
+        buckets = ranking.three_lane_view(
+            session, filters, per_lane=args.per_lane, today=args.today
+        )
+
+    if not buckets:
+        print(
+            "No scored postings. Run 'ingest --max-tier 3' for descriptions, and check the corpus."
+        )
+        return 0
+
+    for bucket in buckets:
+        print(f"\n{'=' * 70}\n{bucket.lane.value.upper()}  (suggested {bucket.weekly_quota}/week)")
+        for item in bucket.postings:
+            m = item.match
+            flag = "~thin" if m.is_thin_evidence else "     "
+            print(
+                f"  {m.score:3} {flag} {item.summary.company_name[:22]:22} "
+                f"{item.summary.title[:34]:34} {item.lane.reason}"
+            )
+            if m.gaps:
+                print(f"          gaps: {', '.join(t.display for t in m.gaps[:5])}")
+    return 0
+
+
 def cmd_cycles(args: argparse.Namespace) -> int:
     today = args.today or date.today()
     with session_scope() as session:
@@ -153,6 +187,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     postings.add_argument("--limit", type=int, default=25)
     postings.set_defaults(func=cmd_postings)
+
+    discover = sub.add_parser(
+        "discover", help="The three-lane view: reach / target / safety, scored against your corpus."
+    )
+    discover.add_argument("--season", choices=[s.value for s in Season])
+    discover.add_argument("--role", help="Role family, e.g. swe, quant, ai_ml.")
+    discover.add_argument("--state", action="append", help="Two-letter state code; repeatable.")
+    discover.add_argument("--per-lane", type=int, default=6)
+    discover.add_argument(
+        "--include-title-only",
+        action="store_true",
+        help="Include postings with no description (weaker match evidence).",
+    )
+    discover.set_defaults(func=cmd_discover)
 
     cycles = sub.add_parser("cycles", help="Show cycles still open to apply to.")
     cycles.set_defaults(func=cmd_cycles)

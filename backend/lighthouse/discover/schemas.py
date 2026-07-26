@@ -86,8 +86,60 @@ class GhostAssessmentOut(BaseModel):
     signals: list[GhostSignalOut]
 
 
+class TermMatchOut(BaseModel):
+    """One posting term and how the corpus relates to it. Every field is a
+    fact the operator can check against the posting, not a derived score."""
+
+    term: str
+    posting_count: int
+    corpus_count: int
+    is_technical: bool
+    emphasis: str = Field(description="'core' (>=5x), 'important' (>=3x), or 'mentioned'.")
+    component_evidence: list[str] = Field(
+        default=[], description="For a reword: the corpus words that already cover this phrase."
+    )
+
+
+class MatchOut(BaseModel):
+    """The three-bucket keyword breakdown. The score is secondary to these
+    lists, which are what the operator can actually act on."""
+
+    score: int
+    evidence_basis: str = Field(description="How much the score is worth, in plain words.")
+    thin_evidence: bool
+    summary: str
+    matched: list[TermMatchOut] = []
+    reword: list[TermMatchOut] = Field(
+        default=[], description="Experience the corpus has under different wording."
+    )
+    gaps: list[TermMatchOut] = Field(
+        default=[], description="Emphasised terms with no corpus support. Real gaps, not keywords."
+    )
+
+
+class LaneOut(BaseModel):
+    lane: str
+    selectivity: int
+    reason: str
+
+
+class ScoredPostingOut(PostingSummary):
+    match: MatchOut
+    lane: LaneOut
+
+
+class LaneBucketOut(BaseModel):
+    """One lane of the three-lane view, with its suggested weekly quota."""
+
+    lane: str
+    weekly_quota: int
+    count: int
+    postings: list[ScoredPostingOut]
+
+
 class PostingDetail(PostingSummary):
     description: str | None = None
+    match: MatchOut | None = None
     ghost: GhostAssessmentOut | None = None
     ats_vendor: str | None = None
     ats_job_id: str | None = None
