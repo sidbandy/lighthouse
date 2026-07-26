@@ -340,6 +340,12 @@ def match(
         else:
             gaps.append(entry)
 
+    # Lead the gap list with technical terms. A missing skill ("Kubernetes")
+    # is actionable in a way a merely frequent word ("customers") is not, so it
+    # should be what the operator sees first even if the generic word recurs
+    # more often.
+    gaps.sort(key=lambda t: (not t.is_technical, -t.posting_count))
+
     return MatchResult(
         score=coverage_score(considered),
         rarity=round(_bm25(posting, index), 2),

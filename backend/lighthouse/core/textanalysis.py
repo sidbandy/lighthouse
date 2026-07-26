@@ -63,6 +63,10 @@ STOPWORDS: frozenset[str] = frozenset(
     salary compensation equal employer opportunity diversity inclusive veteran disability
     student students undergraduate graduate degree bachelor master phd university college
     intern internship co op summer fall winter spring program programme
+    office onsite offsite hybrid headquarters status update updates project projects
+    stakeholder stakeholders deliverable deliverables communication collaboration teamwork
+    responsible ownership impact impactful cross functional fast paced end to end
+    location locations onsite remote position role team member members people person
     """.split()
 )
 
@@ -94,6 +98,13 @@ TECH_TERMS: frozenset[str] = frozenset(
     cryptography encryption authentication authorization penetration firewall
     statistics probability regression classification clustering optimisation optimization
     derivatives equities futures options hedging arbitrage portfolio
+    autonomous autonomy robotics robot sensor sensors perception lidar radar sonar
+    electrical mechanical aerospace propulsion actuator controls kinematics
+    gpu cuda simd opengl vulkan metal shader rendering graphics simulation
+    distributed concurrent parallel realtime deterministic
+    compiler interpreter runtime bytecode llvm wasm
+    blockchain solidity smart-contract defi
+    bioinformatics genomics computational
     """.split()
 )
 
@@ -242,7 +253,11 @@ def tokenize_with_surface(text: str, *, keep_stopwords: bool = False) -> list[tu
         stemmed = stem(cleaned)
         if not keep_stopwords and stemmed in STOPWORDS:
             continue
-        if len(stemmed) >= 2 or stemmed in TECH_TERMS:
+        # A technical term of any length is kept ("c", "go", "r", "ai"), but a
+        # general word needs at least three letters. This drops tokenisation
+        # crumbs like "u.s" and "ll" that are otherwise indistinguishable from
+        # real short words and read as nonsense in a gap list.
+        if stemmed in TECH_TERMS or sum(c.isalpha() for c in stemmed) >= 3:
             result.append((stemmed, cleaned))
     return result
 
