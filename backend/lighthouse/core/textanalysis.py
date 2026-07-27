@@ -10,8 +10,10 @@ Three things live here:
 
 * A tokeniser that understands technical writing, where ``C++``, ``.NET`` and
   ``CI/CD`` are single tokens rather than punctuation to discard.
-* A light suffix stemmer, so "distributed"/"distributing" and
-  "engineer"/"engineering" collapse together.
+* A light suffix stemmer, so "engineer"/"engineering" and "deploy"/"deployed"
+  collapse together. It deliberately leaves curated technical terms untouched,
+  so "kubernetes" is never mangled into "kubernet" -- which means a term that
+  is both a tech term and inflected (rare) matches on its literal form only.
 * A curated dictionary of technical terms and multi-word phrases, which is what
   separates "Kubernetes" from "opportunity" without a model.
 """
@@ -91,6 +93,7 @@ TECH_TERMS: frozenset[str] = frozenset(
     git svn mercurial jira confluence figma
     verilog vhdl fpga asic pcb altium cadence synopsys spice
     api sdk cli gui orm mvc crud oauth jwt saml ldap ssl tls https ssh vpn
+    ai ml ui ux qa os db cv etl elt iot ar vr
     agile scrum kanban devops sre mlops ci cd tdd bdd oop
     algorithm algorithms datastructure concurrency parallelism multithreading asynchronous
     microservices monolith serverless containerisation containerization virtualisation
