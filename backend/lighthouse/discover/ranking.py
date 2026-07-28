@@ -90,7 +90,12 @@ def score_postings(
     scored: list[ScoredPosting] = []
     for summary in summaries:
         posting = session.get(Posting, summary.id)
-        result = match.match(title=posting.title, description=posting.description, index=index)
+        result = match.match(
+            title=posting.title,
+            description=posting.description,
+            index=index,
+            company_name=summary.company_name,
+        )
         canonical, tier = companies.get(summary.id, ("", None))
         selectivity = lanes.selectivity_of(canonical, tier)
         assignment = lanes.assign_lane(
@@ -136,10 +141,16 @@ def three_lane_view(
     for item in scored:
         buckets[item.lane.lane].append(item)
 
+    # Always return all three lanes, even when one is empty, so the layout is
+    # stable and the operator can see that a lane (often Safety) has nothing in
+    # it yet -- which is itself information.
     return [
-        LaneBucket(lane=lane, weekly_quota=lanes.WEEKLY_QUOTA[lane], postings=items[:per_lane])
+        LaneBucket(
+            lane=lane,
+            weekly_quota=lanes.WEEKLY_QUOTA[lane],
+            postings=buckets[lane][:per_lane],
+        )
         for lane in (Lane.REACH, Lane.TARGET, Lane.SAFETY)
-        if (items := buckets[lane])
     ]
 
 
@@ -212,5 +223,10 @@ def match_for_posting(session: Session, posting: Posting) -> MatchOut | None:
     if index.is_empty:
         return None
     return match_to_out(
-        match.match(title=posting.title, description=posting.description, index=index)
+        match.match(
+            title=posting.title,
+            description=posting.description,
+            index=index,
+            company_name=posting.company.name if posting.company else None,
+        )
     )

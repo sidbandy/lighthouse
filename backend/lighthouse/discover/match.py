@@ -25,7 +25,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from ..core.textanalysis import TermProfile, is_technical, profile, stem
+from ..core.textanalysis import TermProfile, is_technical, profile, stem, tokenize
 
 # Standard BM25 constants. k1 controls how fast term-frequency saturates; b
 # controls how much document length is normalised away.
@@ -299,6 +299,7 @@ def match(
     title: str,
     description: str | None,
     index: CorpusIndex,
+    company_name: str | None = None,
     max_terms: int = 12,
 ) -> MatchResult:
     """Score one posting and explain the result.
@@ -308,6 +309,10 @@ def match(
     """
     text = f"{title}\n{description}" if description else title
     posting = profile(text)
+
+    # The company's own name is not a skill. A JD repeats it constantly, so
+    # without this "appian ×19" shows up as the top gap, which is nonsense.
+    company_terms = {stem(tok) for tok in tokenize(company_name or "")}
 
     matched: list[TermMatch] = []
     gaps: list[TermMatch] = []
@@ -322,7 +327,7 @@ def match(
             continue
         # "You are missing: systems" is not something anyone can act on. These
         # words only carry meaning inside a phrase, which is reported separately.
-        if term in _GENERIC_PHRASE_WORDS:
+        if term in _GENERIC_PHRASE_WORDS or term in company_terms:
             continue
         entry = TermMatch(
             term=term,
