@@ -12,6 +12,13 @@ export type RoleFamily =
   | "quant"
   | "product"
   | "security"
+  | "design"
+  | "finance"
+  | "consulting"
+  | "business"
+  | "marketing"
+  | "mechanical"
+  | "science"
   | "other";
 export type Sponsorship =
   | "unknown"

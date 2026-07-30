@@ -454,6 +454,22 @@ _STOP_REQUIREMENTS = {
     "year",
     "people",
     "person",
+    # Eligibility/authorization words -- surfaced as knockouts, not skills.
+    "eligible",
+    "eligibility",
+    "authorized",
+    "authorization",
+    "citizen",
+    "citizenship",
+    "clearance",
+    "sponsorship",
+    "visa",
+    "degree",
+    "gpa",
+    "graduate",
+    "graduation",
+    "enrolled",
+    "pursuing",
 }
 
 

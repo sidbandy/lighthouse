@@ -278,28 +278,89 @@ def location_label(parsed: dict) -> str:
 def classify_role_family(title: str) -> RoleFamily:
     """Bucket a title into a role family from keywords.
 
-    Order matters: "ML infrastructure engineer" should land in AI/ML, so the
-    more specific families are tested before the general SWE catch-all.
+    Order matters: the most specific families are tested first so "ML
+    infrastructure engineer" lands in AI/ML, "financial data analyst" in Data
+    (not Finance), and the broad Software/Engineering catch-alls come last.
+    Lighthouse serves more than CS majors, so finance, consulting, business,
+    design, other engineering and science are all first-class.
     """
     text = f" {normalize_title(title)} "
-    if re.search(r"\b(quant\w*|trading|trader)\b", text):
+
+    # Tech-adjacent specifics first.
+    if re.search(r"\b(quant\w*|trading|trader|market maker)\b", text):
         return RoleFamily.QUANT
-    if re.search(r"\b(machine learning|ml|ai|deep learning|nlp|computer vision|research)\b", text):
-        return RoleFamily.AI_ML
-    if re.search(r"\b(security|infosec|appsec|cryptograph\w+)\b", text):
-        return RoleFamily.SECURITY
     if re.search(
-        r"\b(data (scien\w+|engineer\w*|analy\w+)|analytics|business intelligence)\b", text
-    ):
-        return RoleFamily.DATA
-    if re.search(r"\b(hardware|asic|fpga|electrical|mechanical|silicon|embedded|firmware)\b", text):
-        return RoleFamily.HARDWARE
-    if re.search(r"\b(product manage\w*|product owner|pm)\b", text):
-        return RoleFamily.PRODUCT
-    if re.search(
-        r"\b(software|engineer\w*|developer|sde|swe|programm\w+|full stack|backend|frontend)\b",
+        r"\b(machine learning|ml|ai|deep learning|nlp|computer vision|"
+        r"applied scien\w+)\b",
         text,
     ):
+        return RoleFamily.AI_ML
+    if re.search(r"\b(security|infosec|appsec|cryptograph\w+|penetration|soc analyst)\b", text):
+        return RoleFamily.SECURITY
+    if re.search(
+        r"\b(data (scien\w+|engineer\w*|analy\w+)|analytics|business intelligence|"
+        r"bi analyst|statistic\w+)\b",
+        text,
+    ):
+        return RoleFamily.DATA
+    if re.search(r"\b(product manage\w*|product owner|associate product|apm|pm intern)\b", text):
+        return RoleFamily.PRODUCT
+
+    # Non-CS families.
+    if re.search(
+        r"\b(investment bank\w*|equity research|private equity|hedge fund|venture capital|"
+        r"financial analyst|corporate finance|accounting|accountant|audit\w*|tax|treasury|"
+        r"actuar\w+|underwrit\w+|wealth manage\w+|finance intern|fp&a|m&a)\b",
+        text,
+    ):
+        return RoleFamily.FINANCE
+    if re.search(r"\b(consult\w+|strategy analyst|management consult\w+|advisory)\b", text):
+        return RoleFamily.CONSULTING
+    if re.search(
+        r"\b(marketing|brand|growth|seo|content|social media|communications|public relations|"
+        r"sales|business development|account executive|account manager)\b",
+        text,
+    ):
+        return RoleFamily.MARKETING
+    if re.search(
+        r"\b(design\w*|ux|ui|user experience|user interface|graphic|visual|industrial design|"
+        r"product design|creative|illustrat\w+|animat\w+)\b",
+        text,
+    ):
+        return RoleFamily.DESIGN
+    if re.search(
+        r"\b(mechanical|aerospace|aeronautic\w+|civil engineer\w*|structural|chemical engineer\w*|"
+        r"manufacturing|process engineer\w*|robotics engineer|automotive)\b",
+        text,
+    ):
+        return RoleFamily.MECHANICAL
+    if re.search(
+        r"\b(hardware|asic|fpga|electrical|silicon|embedded|firmware|circuit|vlsi)\b", text
+    ):
+        return RoleFamily.HARDWARE
+    if re.search(
+        r"\b(biolog\w+|chemist\w*|chemistry|physic\w+|lab|laboratory|clinical|biotech|"
+        r"pharma\w*|genom\w+|neuroscien\w+|scientist)\b",
+        text,
+    ):
+        return RoleFamily.SCIENCE
+    if re.search(
+        r"\b(business|operations|strategy|finance and|program manage\w+|project manage\w+|"
+        r"supply chain|logistics|human resources|recruit\w+|general management|rotational)\b",
+        text,
+    ):
+        return RoleFamily.BUSINESS
+
+    # Broad catch-alls last.
+    if re.search(
+        r"\b(software|developer|sde|swe|programm\w+|full stack|backend|frontend|web dev\w*|"
+        r"devops|site reliability)\b",
+        text,
+    ):
+        return RoleFamily.SWE
+    if re.search(r"\b(engineer\w*)\b", text):
+        # An unqualified "engineer" that reached here is not clearly CS/EE/ME;
+        # keep it in Software, the most common intern case, rather than OTHER.
         return RoleFamily.SWE
     return RoleFamily.OTHER
 

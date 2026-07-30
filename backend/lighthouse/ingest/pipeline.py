@@ -183,7 +183,8 @@ def persist(session: Session, merged_postings: list[MergedPosting], today: date)
         posting.term_rule = resolution.rule
         posting.term_evidence = resolution.evidence
         posting.employment_type = classify_employment_type(merged.title, merged.employment_hint)
-        posting.role_family = classify_role_family(merged.title)
+        # Store the plain value (lowercase); role_family is a string column now.
+        posting.role_family = classify_role_family(merged.title).value
         posting.sponsorship = parse_sponsorship(merged.sponsorship_raw)
         posting.locations = merged.locations
         posting.location_labels = merged.location_labels

@@ -82,13 +82,24 @@ class Sponsorship(enum.StrEnum):
 
 
 class RoleFamily(enum.StrEnum):
+    """Role families across the majors Lighthouse serves -- not just CS. Stored
+    as a plain string column (see ``Posting.role_family``) so this taxonomy can
+    grow without an enum migration each time."""
+
     SWE = "swe"
     AI_ML = "ai_ml"
     DATA = "data"
     HARDWARE = "hardware"
     QUANT = "quant"
-    PRODUCT = "product"
     SECURITY = "security"
+    PRODUCT = "product"
+    DESIGN = "design"
+    FINANCE = "finance"
+    CONSULTING = "consulting"
+    BUSINESS = "business"
+    MARKETING = "marketing"
+    MECHANICAL = "mechanical"
+    SCIENCE = "science"
     OTHER = "other"
 
 
@@ -189,8 +200,11 @@ class Posting(Base):
     employment_type: Mapped[EmploymentType] = mapped_column(
         Enum(EmploymentType, name="employment_type"), default=EmploymentType.INTERNSHIP
     )
-    role_family: Mapped[RoleFamily] = mapped_column(
-        Enum(RoleFamily, name="role_family"), default=RoleFamily.OTHER
+    # Plain string, not a native enum: the role taxonomy grows as Lighthouse
+    # covers more majors, and a string column avoids an ALTER TYPE each time.
+    # Values still come from RoleFamily.
+    role_family: Mapped[str] = mapped_column(
+        String(20), default=RoleFamily.OTHER.value, nullable=False, index=True
     )
     sponsorship: Mapped[Sponsorship] = mapped_column(
         Enum(Sponsorship, name="sponsorship"), default=Sponsorship.UNKNOWN

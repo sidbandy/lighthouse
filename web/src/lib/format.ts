@@ -18,6 +18,13 @@ const ROLE_LABELS: Record<string, string> = {
   quant: "Quant",
   product: "Product",
   security: "Security",
+  design: "Design",
+  finance: "Finance",
+  consulting: "Consulting",
+  business: "Business",
+  marketing: "Marketing",
+  mechanical: "Mech / Eng",
+  science: "Science",
   other: "Other",
 };
 

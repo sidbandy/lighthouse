@@ -115,6 +115,31 @@ TECH_TERMS: frozenset[str] = frozenset(
     """.split()
 )
 
+# Skill vocabulary beyond software, so the match and tailoring engines work for
+# business, finance, consulting, design, other-engineering and science majors.
+# Kept separate for clarity but folded into the same recognised set.
+DOMAIN_TERMS: frozenset[str] = frozenset(
+    """
+    excel powerpoint word outlook sharepoint gsuite spreadsheet spreadsheets macros
+    tableau powerbi looker qlik sap salesforce hubspot netsuite quickbooks workday
+    dcf lbo valuation modeling comps accretion dilution accounting gaap ifrs audit
+    bloomberg factset capiq pitchbook reuters ebitda npv irr wacc equities fixed-income
+    forecasting budgeting variance reconciliation ledger payable receivable
+    consulting casework benchmarking due-diligence market-sizing go-to-market
+    marketing seo sem ppc crm cro copywriting branding positioning segmentation
+    campaign analytics ga4 hubspot mailchimp hootsuite adwords conversion funnel
+    figma sketch adobe photoshop illustrator indesign xd invision framer prototyping
+    wireframe typography accessibility usability persona journey storyboard
+    cad solidworks autocad catia creo ansys abaqus matlab simulink labview
+    fea cfd gd&t tolerancing thermodynamics fluid statics dynamics hvac plc
+    revit civil3d structural geotechnical surveying autocad autodesk
+    chemistry biology physics genomics assay chromatography spectroscopy pcr crispr
+    clinical regulatory gmp gxp titration microscopy calorimetry
+    lean six-sigma kaizen kanban procurement logistics inventory forecasting erp
+    stakeholder negotiation presentation okrs kpis roadmap
+    """.split()
+)
+
 # Multi-word phrases worth treating as one term. A posting saying "distributed
 # systems" six times is asking for something quite specific, and splitting it
 # into "distributed" + "systems" loses that.
@@ -181,9 +206,50 @@ TECH_PHRASES: tuple[str, ...] = (
     "technical writing",
 )
 
+# Multi-word phrases for the non-CS domains.
+DOMAIN_PHRASES: tuple[str, ...] = (
+    "financial modeling",
+    "financial modelling",
+    "financial analysis",
+    "discounted cash flow",
+    "market research",
+    "market sizing",
+    "due diligence",
+    "go to market",
+    "profit and loss",
+    "supply chain",
+    "project management",
+    "product marketing",
+    "social media",
+    "user research",
+    "user experience",
+    "graphic design",
+    "industrial design",
+    "mechanical design",
+    "finite element",
+    "computational fluid dynamics",
+    "data analysis",
+    "business development",
+    "public relations",
+    "content marketing",
+    "email marketing",
+    "brand strategy",
+    "financial statements",
+    "equity research",
+    "investment banking",
+    "private equity",
+    "venture capital",
+    "corporate finance",
+    "risk analysis",
+    "process improvement",
+    "quality assurance",
+    "supply chain management",
+    "customer success",
+)
+
 _PHRASE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
     (phrase, re.compile(r"\b" + r"[\s-]+".join(map(re.escape, phrase.split())) + r"\b", re.I))
-    for phrase in TECH_PHRASES
+    for phrase in (*TECH_PHRASES, *DOMAIN_PHRASES)
 )
 
 # Suffix rules, longest first. A real stemmer (Porter) over-stems for technical
@@ -289,8 +355,20 @@ def extract_phrases(text: str) -> list[str]:
 
 
 def is_technical(term: str) -> bool:
-    """Whether a term is recognised technical vocabulary."""
-    return term in TECH_TERMS or term in TECH_PHRASES or stem(term) in TECH_TERMS
+    """Whether a term is recognised skill vocabulary.
+
+    "Technical" is used loosely -- it means "a real skill signal", which for a
+    finance or design major is Bloomberg or Figma just as much as it is
+    Kubernetes for a CS major.
+    """
+    return (
+        term in TECH_TERMS
+        or term in DOMAIN_TERMS
+        or term in TECH_PHRASES
+        or term in DOMAIN_PHRASES
+        or stem(term) in TECH_TERMS
+        or stem(term) in DOMAIN_TERMS
+    )
 
 
 @dataclass(slots=True)

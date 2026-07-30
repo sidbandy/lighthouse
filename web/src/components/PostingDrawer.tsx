@@ -4,6 +4,7 @@ import type { PostingDetail } from "../api/types";
 import { relativeAge, sourceLabel, sponsorshipLabel, termRuleLabel } from "../lib/format";
 import { GhostChecklist } from "./GhostChecklist";
 import { MatchMeter } from "./MatchMeter";
+import { TailorPanel } from "./TailorPanel";
 import { TermChips } from "./TermChips";
 
 // The full posting: everything the operator needs to decide whether to spend an
@@ -108,6 +109,8 @@ function DrawerBody({ posting, onClose }: { posting: PostingDetail; onClose: () 
           Add a few corpus facts to see how this posting matches your background.
         </section>
       )}
+
+      {posting.description_available && <TailorPanel postingId={posting.id} />}
 
       {posting.ghost && (
         <section className="card p-4">

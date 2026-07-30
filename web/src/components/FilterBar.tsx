@@ -11,7 +11,22 @@ export interface Filters {
   withDescriptionOnly: boolean;
 }
 
-const ROLES: RoleFamily[] = ["swe", "ai_ml", "data", "quant", "hardware", "security", "product"];
+const ROLES: RoleFamily[] = [
+  "swe",
+  "ai_ml",
+  "data",
+  "quant",
+  "hardware",
+  "security",
+  "product",
+  "design",
+  "finance",
+  "consulting",
+  "business",
+  "marketing",
+  "mechanical",
+  "science",
+];
 const SEASONS: { value: Season; label: string }[] = [
   { value: "fall", label: "Fall" },
   { value: "winter", label: "Winter" },

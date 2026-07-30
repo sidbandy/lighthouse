@@ -228,7 +228,14 @@ class TestClassifyRoleFamily:
             ("FPGA Hardware Engineer Intern", RoleFamily.HARDWARE),
             ("Product Manager Intern", RoleFamily.PRODUCT),
             ("Software Engineer Intern", RoleFamily.SWE),
-            ("Marketing Intern", RoleFamily.OTHER),
+            # Non-CS families: Lighthouse serves more than CS majors.
+            ("Marketing Intern", RoleFamily.MARKETING),
+            ("Investment Banking Summer Analyst", RoleFamily.FINANCE),
+            ("Management Consulting Intern", RoleFamily.CONSULTING),
+            ("UX Designer Intern", RoleFamily.DESIGN),
+            ("Mechanical Engineering Intern", RoleFamily.MECHANICAL),
+            ("Research Scientist Intern - Chemistry", RoleFamily.SCIENCE),
+            ("Supply Chain Analyst Intern", RoleFamily.BUSINESS),
         ],
     )
     def test_buckets_by_keyword(self, title, family):
