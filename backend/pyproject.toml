@@ -21,6 +21,7 @@ dependencies = [
     "python-dateutil>=2.9",
     # Scheduling
     "apscheduler>=3.10",
+    "python-multipart>=0.0.12",
 ]
 
 [project.optional-dependencies]

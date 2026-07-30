@@ -69,6 +69,10 @@ STOPWORDS: frozenset[str] = frozenset(
     stakeholder stakeholders deliverable deliverables communication collaboration teamwork
     responsible ownership impact impactful cross functional fast paced end to end
     location locations onsite remote position role team member members people person
+    like makes make made making available want wants need needs get gets got take takes
+    help helps look looks find finds become becomes various multiple several able willing
+    eager passionate curious excited interested interview interviews learn learns
+    thing things way ways lot lots really actually simply just able bring brings
     """.split()
 )
 
