@@ -14,7 +14,9 @@ function Beacon() {
   );
 }
 
-export function Header() {
+export type View = "discover" | "resume";
+
+export function Header({ view, onView }: { view: View; onView: (v: View) => void }) {
   const [cycles, setCycles] = useState<CycleCount[]>([]);
   const [health, setHealth] = useState<SourceHealth[]>([]);
 
@@ -39,8 +41,18 @@ export function Header() {
           </div>
         </div>
 
+        <nav className="flex items-center gap-1">
+          <NavItem active={view === "discover"} onClick={() => onView("discover")}>
+            Discover
+          </NavItem>
+          <NavItem active={view === "resume"} onClick={() => onView("resume")}>
+            Résumé check
+          </NavItem>
+        </nav>
+
         <div className="flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          {cycles.map((c) => (
+          {view === "discover" &&
+            cycles.map((c) => (
             <div
               key={c.term_label}
               className="chip border-ink-700 shrink-0"
@@ -64,5 +76,26 @@ export function Header() {
         </div>
       </div>
     </header>
+  );
+}
+
+function NavItem({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-lg text-sm font-500 transition-colors ${
+        active ? "bg-ink-800 text-mist-100" : "text-mist-400 hover:text-mist-200 hover:bg-ink-850"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

@@ -2,13 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "./api/client";
 import type { LaneBucket } from "./api/types";
 import { FilterBar, type Filters } from "./components/FilterBar";
-import { Header } from "./components/Header";
+import { Header, type View } from "./components/Header";
 import { LaneColumn } from "./components/LaneColumn";
 import { PostingDrawer } from "./components/PostingDrawer";
+import { ResumeCheck } from "./components/ResumeCheck";
 
 const EMPTY_FILTERS: Filters = { role: null, season: null, withDescriptionOnly: false };
 
 export default function App() {
+  const [view, setView] = useState<View>("discover");
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [lanes, setLanes] = useState<LaneBucket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,9 +36,18 @@ export default function App() {
 
   const total = lanes.reduce((n, l) => n + l.count, 0);
 
+  if (view === "resume") {
+    return (
+      <div className="min-h-full flex flex-col">
+        <Header view={view} onView={setView} />
+        <ResumeCheck />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-full flex flex-col">
-      <Header />
+      <Header view={view} onView={setView} />
 
       <div className="px-6 py-4 border-b border-ink-800/60">
         <FilterBar filters={filters} onChange={setFilters} />

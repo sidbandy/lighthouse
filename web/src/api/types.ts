@@ -126,6 +126,69 @@ export interface SourceHealth {
   is_quarantined: boolean;
 }
 
+// --- Track: ATS check + tailoring ---
+
+export interface AtsFinding {
+  severity: "CRITICAL" | "WARNING" | "MINOR";
+  category: string;
+  title: string;
+  detail: string;
+  fix: string;
+  evidence: string | null;
+}
+
+export interface ParsePreview {
+  visual_text: string;
+  ats_text: string;
+  scrambled: boolean;
+  column_count: number;
+}
+
+export interface AtsReport {
+  will_parse_cleanly: boolean;
+  verdict: string;
+  page_count: number;
+  char_count: number;
+  word_count: number;
+  fonts: string[];
+  findings: AtsFinding[];
+  preview: ParsePreview | null;
+}
+
+export interface Requirement {
+  term: string;
+  tier: "REQUIRED" | "PREFERRED" | "RESPONSIBILITY" | "GENERAL";
+  posting_count: number;
+  emphasis: "core" | "important" | "mentioned";
+  is_technical: boolean;
+  evidenced: boolean;
+  is_reword: boolean;
+  in_resume: boolean;
+  component_evidence: string[];
+  advice: string;
+}
+
+export interface HardRequirement {
+  kind: string;
+  label: string;
+  detail: string;
+}
+
+export interface TailorReport {
+  posting_title: string;
+  company_name: string | null;
+  summary: string;
+  coverage: number;
+  potential_coverage: number;
+  resume_available: boolean;
+  hard_requirements: HardRequirement[];
+  required_gaps: Requirement[];
+  missing_from_resume: Requirement[];
+  rewords: Requirement[];
+  evidenced: Requirement[];
+  other_gaps: Requirement[];
+}
+
 export interface DiscoverParams {
   season?: Season[];
   role_family?: RoleFamily[];
