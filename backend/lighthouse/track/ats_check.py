@@ -149,8 +149,10 @@ _STANDARD_SECTIONS = {
 
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 _PHONE_RE = re.compile(r"(?:\+?1[\s.\-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}")
-# A heading line: short, no trailing sentence punctuation.
-_HEADING_RE = re.compile(r"^[A-Z][A-Za-z /&]{2,40}$")
+# A heading line: short, no trailing sentence punctuation. The apostrophe is
+# allowed because bespoke headings ("What I've Built") routinely contain one --
+# and those are exactly the nonstandard headings this check exists to catch.
+_HEADING_RE = re.compile(r"^[A-Z][A-Za-z '/&]{2,40}$")
 # Employment date ranges the ATS uses to compute tenure.
 _DATE_RANGE_RE = re.compile(
     r"\b((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\.?\s*)?\d{4}\s*"

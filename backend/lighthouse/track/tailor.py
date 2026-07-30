@@ -148,7 +148,14 @@ _HARD_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     ),
     (
         "location",
-        re.compile(r"\b(on-?site|in-?office|relocat\w+|must (?:be|reside|live))\b", re.I),
+        # "must be located/based/on-site", but not "must be authorized" -- that
+        # is an authorization knockout, and matching a bare "must be" here
+        # double-counts it.
+        re.compile(
+            r"\b(on-?site|in-?office|relocat\w+|"
+            r"must (?:reside|live|relocate|be (?:located|based|on-?site|in office)))\b",
+            re.I,
+        ),
         "Location / on-site",
     ),
 )
