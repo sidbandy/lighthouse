@@ -11,7 +11,7 @@ export interface Filters {
   withDescriptionOnly: boolean;
 }
 
-const ROLES: RoleFamily[] = [
+export const ROLES: RoleFamily[] = [
   "swe",
   "ai_ml",
   "data",

@@ -11,6 +11,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .core.router import router as corpus_router
 from .discover.router import router as discover_router
 from .ingest.router import router as ingest_router
 from .track.router import router as track_router
@@ -33,6 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(corpus_router)
 app.include_router(discover_router)
 app.include_router(ingest_router)
 app.include_router(track_router)

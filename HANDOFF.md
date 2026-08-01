@@ -81,7 +81,7 @@ PYTHONPATH=backend .venv/bin/python -m lighthouse.cli cycles       # applyable c
 PYTHONPATH=backend .venv/bin/python -m lighthouse.cli sources      # per-source health
 
 # --- tests / lint / migrations ---
-.venv/bin/pytest backend/tests -q          # 376 passing
+.venv/bin/pytest backend/tests -q          # 419 passing
 .venv/bin/ruff check backend               # clean
 .venv/bin/ruff format backend
 cd backend && ../.venv/bin/alembic upgrade head
@@ -104,6 +104,8 @@ backend/lighthouse/
 │   ├── corpus.py     # the operator's facts/stories: CRUD, zero-fab enforcement
 │   ├── resume.py     # PDF -> draft facts (pdfplumber); raw text for ATS check
 │   ├── onboarding.py # empty -> usable: resume, projects, targets, constraints
+│   ├── schemas.py    # Pydantic shapes for corpus + onboarding
+│   ├── router.py     # /api/corpus/*, /api/onboarding/*, /api/companies/search
 │   └── textanalysis.py # tokenizer/stemmer, TECH_TERMS + DOMAIN_TERMS vocab, phrases
 ├── ingest/
 │   ├── seasons.py    # Cycle, applyable_cycles(today) -> auto-advancing cycles
@@ -120,6 +122,7 @@ backend/lighthouse/
 │   ├── router.py     # /api/ingest/*
 │   └── connectors/   # simplify.py, markdown_repo.py, ats.py (greenhouse/ashby/lever/SR)
 ├── discover/
+│   ├── coverage.py   # corpus x market: per-fact reach/unique-reach, corpus-wide gaps
 │   ├── match.py      # BM25 CorpusIndex + 3-bucket keyword output (evidenced/reword/gap)
 │   ├── ghost.py      # ghost-job signal checklist (facts, NO probability)
 │   ├── lanes.py      # company selectivity tiers + reach/target/safety assignment
@@ -145,8 +148,14 @@ web/src/
 │   ├── GhostChecklist.tsx     # ghost signals
 │   ├── ResumeCheck.tsx        # the resume-check page (upload)
 │   ├── ParsePreview.tsx       # THE centerpiece: what-you-see vs what-the-ATS-extracts
-│   └── AtsFindings.tsx        # severity-ranked findings with fixes
-└── App.tsx                    # view switch (discover | resume)
+│   ├── AtsFindings.tsx        # severity-ranked findings with fixes
+│   ├── CorpusPage.tsx         # the corpus page: orchestrates everything below
+│   ├── CoveragePanel.tsx      # corpus vs live market: reached/unreached + real gaps
+│   ├── FactList.tsx           # facts by type, each showing its reach + unique reach
+│   ├── FactEditor.tsx         # create/edit one fact
+│   ├── ResumeImport.tsx       # PDF -> drafts -> operator review -> corpus
+│   └── SetupPanel.tsx         # target companies + constraints
+└── App.tsx                    # view switch (discover | corpus | resume)
 ```
 
 **Data-flow spine:** everything personal reads/writes the **corpus** (`corpus_facts`, `corpus_stories`) and appends to the **event log** (`events`, append-only, `occurred_at` vs `recorded_at`). Modules never call each other's internals — they go through corpus + events. Shared tables (postings, companies, source_health, reported_questions) have no `user_id`; personal tables have a nullable `user_id` defaulted to a single hardcoded operator UUID — this split is what makes multi-user later a config change, not a rewrite.
@@ -157,7 +166,9 @@ web/src/
 
 ## 8. Data model (key tables in `core/models.py`)
 
-- **Company** (shared): `canonical_name` (dedup blocking key), `ats_vendor`/`ats_slug`/`careers_url`, `tier` (selectivity override).
+- **Company** (shared): `canonical_name` (dedup blocking key), `ats_vendor`/`ats_slug`/`careers_url`, `tier` (**selectivity only** — see `OperatorTarget`).
+- **OperatorProfile** (personal): singleton per `user_id`. Constraints — preferred locations, remote, sponsorship stance, weekly study hours, target cycles. Onboarding writes it; `constraints_set` reads it.
+- **OperatorTarget** (personal): "I want to work here", one row per (user, company). Deliberately **not** a flag on `Company`: wanting a company is a fact about the operator, not about the company.
 - **Posting** (shared): the canonical deduped posting. `canonical_url` (dedup key), `ats_job_id` (identity veto), `season`/`term_year`/`term_rule`/`term_evidence`, `employment_type`, **`role_family` (now a STRING column, not enum — so the taxonomy can grow)**, `sponsorship`, `locations` (JSONB superset), `description`/`description_available`, `is_active`, `posted_at`, `embedding` (unused).
 - **PostingSource** (shared): provenance, one per (posting, source) sighting; `source_fingerprint` makes re-ingest idempotent. Enables "seen on N lists."
 - **SourceHealth** (shared): per-source `last_success_at`, row counts, `consecutive_failures`, `is_quarantined` (trips when a run returns <50% of prior rows).
@@ -170,7 +181,7 @@ Enums are Python `StrEnum` (Season, Sponsorship, RoleFamily, EmploymentType). `R
 
 ---
 
-## 9. What is BUILT and working (14 commits, 376 tests passing, clean lint)
+## 9. What is BUILT and working (16 commits, 419 tests passing, clean lint)
 
 **Ingestion (Discover phase 1 — the first useful milestone, DONE):**
 - **~95 sources across 3 tiers.** Tier 1: Simplify's structured `listings.json` (internships + new-grad; carries a `terms` array spanning all cycles — this is what makes off-cycle coverage possible). Tier 2: 11 curated markdown repos (vansh, speedyapply, zapplyjobs, jobright, sndsh, NUFT quant). Tier 3: direct ATS JSON APIs (Greenhouse/Ashby/Lever/SmartRecruiters) — ~27 verified seed boards + auto-discovery from posting URLs. **Tier 3 is the only tier with full descriptions**, which match scoring and tailoring need.
@@ -185,8 +196,11 @@ Enums are Python `StrEnum` (Season, Sponsorship, RoleFamily, EmploymentType). `R
 - Three-lane view (reach/target/safety) from match × company selectivity, with weekly quotas.
 - Full React UI: header with live cycle counts + source health, filter bar (all role families), three lanes, posting cards (score muted when thin), detail drawer.
 
-**Corpus & onboarding (DONE, backend):**
-- Corpus CRUD with zero-fabrication enforcement; resume PDF → draft facts (operator reviews, never auto-committed); onboarding flow (resume → projects → targets → constraints). **No corpus UI yet** — this is a gap (see §10).
+**Corpus & onboarding (DONE, backend + frontend):**
+- Corpus CRUD with zero-fabrication enforcement; resume PDF → draft facts (operator reviews, never auto-committed); onboarding flow (resume → projects → targets → constraints).
+- **The API layer** (`core/router.py`): facts CRUD, `POST /corpus/extract` (drafts, nothing saved) and `POST /corpus/facts/bulk` (commit the reviewed batch) as deliberately separate calls, `GET /corpus/coverage`, onboarding state, targets, constraints, company search. Every corpus write invalidates the match index so the next score reflects the edit.
+- **The corpus page** — the "My corpus" tab. What makes it more than a CRUD form: **every fact shows what it's actually worth in the live market.** Per fact, using the same signal rule the per-posting match uses: the skill terms it contributes, how many ingested postings mention each (`reach`), and how many *no other fact reaches* (`unique_reach`). That last number is the honest answer to "is this pulling its weight?" — on the seeded corpus it correctly showed the standalone `Go`/`React`/`TypeScript` skill facts adding zero coverage the Cloudify and Ledger entries didn't already give.
+- **Corpus-wide coverage** (`discover/coverage.py`): reached/unreached over a stated sample of postings that carry a real description, plus the most-demanded terms no fact evidences. Filterable by role family. Gaps are restricted to recognised skill vocabulary — without that the list fills with "engineer", "software", "technology", which is noise dressed as insight. Cached per role filter, keyed on posting count + last sighting.
 
 **Track — the resume features (DONE, the operator's stated priority):**
 - **ATS parse-safety checker** (`ats_check.py`): geometry-based. Detects multi-column layouts and shows the **parse preview** — the resume re-extracted the way a naive ATS reads it, side by side with the intended layout, so you SEE the scramble. Also: contact-in-header/footer (dropped by ~25% of ATS = auto-reject), ligatures, decorative/non-ATS fonts, risky bullet glyphs, non-standard section headings, image-only PDFs. Ranked worst-first, each with a concrete fix. Grounded in how Workday/Greenhouse/Taleo actually fail. Full UI at the "Résumé check" page.
@@ -200,7 +214,7 @@ Enums are Python `StrEnum` (Season, Sponsorship, RoleFamily, EmploymentType). `R
 
 The plan's build sequence is Discover → Track → Company Intel → Study → Practice → Briefing. Discover is done; Track is mostly done (resume features shipped; the application board + funnel below are not).
 
-1. **Corpus / onboarding UI.** Backend is done, but there's no web UI to upload a resume, review extracted facts, add projects, or pick targets. Right now the corpus is populated via scripts. **This is the biggest gap for real usability** — match scoring is personal only once the corpus exists. Build an onboarding flow + a corpus editor page.
+1. **Stories UI + corpus depth.** `corpus_stories` (STAR + `source_fact_ids`) has a service layer and zero-fab enforcement but no UI and no consumer yet — it unlocks once Study/Practice land. Corpus staleness nudges are also unbuilt (every seeded fact shares one `created_at`, so there is nothing real to show yet).
 2. **Track — application board + funnel (§3).** Event-sourced apply→track pipeline (saved/applied/OA/interview/offer/rejected, `ghosted` as a *dated fact* not a probability), one-click apply-and-log from Discover, resume-version tracking, funnel analytics vs cited published baselines (raw counts + ranges, NO fitted distributions). Models (Application, ResumeVersion, Event) already exist.
 3. **Company Intelligence (§4).** `company_processes` (interview format/rounds/rubrics), expected wait times (real reported gaps, sample size shown), a **cycle-open timing model** from historical posting dates ("Optiver's Summer roles posted early July the last 2 years"), timezone-correct multi-stage deadline calendar with ICS export, specificity hooks. Population is semi-automated (Reddit/LeetCode → extraction → operator review) — needs the Gemini LLM layer.
 4. **Study (§6).** Company-weighted problem intelligence (real reported counts), per-pattern attempt records (transparent, no mastery score), SM-2 spaced repetition tolerant of missed days, deterministic study-plan scheduler, competency-tagged story bank with coverage matrix, TMAY builder. Reuse the recency-weighting helper.
@@ -224,7 +238,7 @@ Do NOT integrate these yet. The operator wants the complete base product first, 
 
 ## 12. Known rough edges / gotchas
 
-- **Corpus is currently populated from scripts, not a UI.** The onboarding backend works; there's no page for it. Until built, match scoring uses whatever facts are seeded (a test resume was used during development — check what's actually in `corpus_facts`).
+- **The seeded corpus is still fake.** `corpus_facts` holds 12 facts from a *test* resume (Cloudify / Ledger / UT CS 2028) used during development — not the operator's real history. The "My corpus" page now exists to replace them; until it is used, every match score is scored against a stranger. Delete them and import a real resume first.
 - **Some ATS seed board slugs are not the obvious guess** (`drweng` not `drw`, `optiverus` not `optiver`, `doordashusa` not `doordash`). Always verify a board slug live before adding it.
 - **Tier 3 is opt-in per company**, not a blanket crawl (polite + avoids thousands of irrelevant requests). Boards you care about get auto-discovered from posting URLs.
 - **JobSpy (Tier 4 aggregators) and the free remote feeds are planned but not yet wired** — only Tiers 1–3 are live in the registry.
@@ -260,7 +274,7 @@ Read commit messages for the "why" — they're detailed and explain the reasonin
 ## 14. First moves in a new session
 
 1. Read this doc, then `LIGHTHOUSE_SPEC.md` and the plan file.
-2. `.venv/bin/pytest backend/tests -q` (expect 376 passing) and `.venv/bin/ruff check backend` (clean) to confirm a green baseline.
+2. `.venv/bin/pytest backend/tests -q` (expect 419 passing) and `.venv/bin/ruff check backend` (clean) to confirm a green baseline.
 3. Start the API + frontend (§6), open localhost:5173, click through Discover and Résumé check to see the current state.
-4. Recommended next build: **the corpus/onboarding UI** (§10 item 1) — it's the biggest usability gap and unlocks personalized scoring for a real user. Then the Track application board.
+4. Recommended next build: **the Track application board + funnel** (§10 item 2) — Discover and the corpus are done, so the next real gap is what happens *after* you decide to apply. The models (Application, ResumeVersion, Event) already exist and nothing writes to them yet; note there is still no `core/events.py`, so the append-only event log has no helper.
 5. Honor the operating principles (§3) and preferences (§4) in everything.

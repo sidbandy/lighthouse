@@ -232,6 +232,22 @@ class CorpusIndex:
         return evidenced if len(evidenced) == len(distinctive) else []
 
 
+def carries_signal(term: str, occurrences: int, *, exclude: frozenset[str] = frozenset()) -> bool:
+    """Whether a term is worth comparing at all.
+
+    One definition, used by both the per-posting match and the corpus-wide
+    coverage view, so the two can never disagree about what counts as a skill
+    term. General vocabulary has to be repeated before it means anything;
+    technical vocabulary counts on a single mention. Phrase filler and the
+    company's own name are never signal.
+    """
+    if term in _GENERIC_PHRASE_WORDS or term in exclude:
+        return False
+    if is_technical(term):
+        return True
+    return occurrences >= IMPORTANT_THRESHOLD
+
+
 def _bm25(posting: TermProfile, index: CorpusIndex) -> float:
     """BM25 of the posting's terms against the corpus."""
     if index.is_empty or posting.total_terms == 0:
@@ -312,7 +328,7 @@ def match(
 
     # The company's own name is not a skill. A JD repeats it constantly, so
     # without this "appian ×19" shows up as the top gap, which is nonsense.
-    company_terms = {stem(tok) for tok in tokenize(company_name or "")}
+    company_terms = frozenset(stem(tok) for tok in tokenize(company_name or ""))
 
     matched: list[TermMatch] = []
     gaps: list[TermMatch] = []
@@ -320,15 +336,13 @@ def match(
     considered: list[TermMatch] = []
 
     for term, posting_count in posting.counts.most_common():
-        technical = is_technical(term)
         # General vocabulary is only interesting when the posting repeats it;
-        # technical terms are interesting even mentioned once.
-        if not technical and posting_count < IMPORTANT_THRESHOLD:
+        # technical terms are interesting even mentioned once. Phrase filler is
+        # never actionable ("you are missing: systems") and the company's own
+        # name is not a skill, so both are excluded.
+        if not carries_signal(term, posting_count, exclude=company_terms):
             continue
-        # "You are missing: systems" is not something anyone can act on. These
-        # words only carry meaning inside a phrase, which is reported separately.
-        if term in _GENERIC_PHRASE_WORDS or term in company_terms:
-            continue
+        technical = is_technical(term)
         entry = TermMatch(
             term=term,
             display=posting.display(term),

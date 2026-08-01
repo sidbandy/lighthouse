@@ -150,7 +150,11 @@ class Company(Base):
     careers_url: Mapped[str | None] = mapped_column(Text)
 
     # Operator-maintained selectivity tier used by the three-lane view. A small
-    # config table, not a machine learning problem.
+    # config table, not a machine learning problem. Strictly *how hard is this
+    # company to get into*, which is true of the company regardless of who is
+    # looking — "I want to work here" is personal and lives in
+    # :class:`OperatorTarget`. Conflating the two once demoted every company the
+    # operator marked, so wanting Jane Street moved it out of Reach.
     tier: Mapped[str | None] = mapped_column(String(40))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -289,6 +293,62 @@ class SourceHealth(Base):
 # --------------------------------------------------------------------------
 # Personal: the corpus
 # --------------------------------------------------------------------------
+
+
+class OperatorProfile(Base):
+    """What the operator is looking for: one row per operator.
+
+    Onboarding collects this (locations, sponsorship stance, target cycles) and
+    Discover reads it to seed filters. It is a singleton keyed by ``user_id``
+    rather than a settings blob so the columns stay typed and queryable, and so
+    the multi-user split described in the module docstring keeps working.
+
+    Everything is nullable-with-a-default: a half-finished profile is a normal
+    state during onboarding, not an error.
+    """
+
+    __tablename__ = "operator_profiles"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), nullable=False, default=DEFAULT_OPERATOR_ID, unique=True, index=True
+    )
+
+    preferred_locations: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    open_to_remote: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    sponsorship: Mapped[str] = mapped_column(String(30), default="us_authorized", nullable=False)
+    weekly_study_hours: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    target_cycles: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class OperatorTarget(Base):
+    """A company this operator wants to work at.
+
+    Personal, so it carries ``user_id`` and does not live as a flag on the
+    shared :class:`Company` row — one operator's ambitions are not a property of
+    the company, and writing them there would make every operator share them.
+    """
+
+    __tablename__ = "operator_targets"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = _operator_fk()
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), nullable=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    company: Mapped[Company] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "company_id", name="uq_operator_targets_user_company"),
+    )
 
 
 class CorpusFact(Base):

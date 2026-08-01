@@ -247,8 +247,17 @@ DOMAIN_PHRASES: tuple[str, ...] = (
     "customer success",
 )
 
-_PHRASE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
-    (phrase, re.compile(r"\b" + r"[\s-]+".join(map(re.escape, phrase.split())) + r"\b", re.I))
+# Each entry carries the phrase's first word alongside its pattern. Scanning a
+# job description with a hundred separate regexes is the single most expensive
+# thing this module does, and almost every one of them fails; a substring test
+# for the first word is a necessary condition for the pattern to match and is
+# orders of magnitude cheaper, so it screens out nearly all of them up front.
+_PHRASE_PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = tuple(
+    (
+        phrase,
+        phrase.split()[0],
+        re.compile(r"\b" + r"[\s-]+".join(map(re.escape, phrase.split())) + r"\b", re.I),
+    )
     for phrase in (*TECH_PHRASES, *DOMAIN_PHRASES)
 )
 
@@ -345,11 +354,20 @@ def tokenize(text: str, *, keep_stopwords: bool = False) -> list[str]:
 
 
 def extract_phrases(text: str) -> list[str]:
-    """Multi-word technical phrases present in the text, with repeats kept."""
+    """Multi-word technical phrases present in the text, with repeats kept.
+
+    Overlapping phrases are all counted -- "supply chain management" registers
+    as both "supply chain" and "supply chain management" -- which is why this
+    runs one pattern per phrase rather than a single combined alternation that
+    would let the longest match swallow the shorter one.
+    """
     if not text:
         return []
+    lowered = text.lower()
     found: list[str] = []
-    for phrase, pattern in _PHRASE_PATTERNS:
+    for phrase, first_word, pattern in _PHRASE_PATTERNS:
+        if first_word not in lowered:
+            continue
         found.extend([phrase] * len(pattern.findall(text)))
     return found
 

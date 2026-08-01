@@ -196,6 +196,133 @@ export interface TailorReport {
   other_gaps: Requirement[];
 }
 
+// --- Corpus: the operator's own facts, and what they are worth ---
+
+export type FactType = "project" | "experience" | "skill" | "achievement" | "education";
+
+export interface Fact {
+  id: string;
+  fact_type: FactType;
+  title: string;
+  body: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FactInput {
+  fact_type: FactType;
+  title: string;
+  body?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/** A candidate fact from a resume. No id, because nothing has been saved. */
+export interface DraftFact {
+  fact_type: FactType;
+  title: string;
+  body: string;
+}
+
+export interface Extraction {
+  drafts: DraftFact[];
+  page_count: number;
+  char_count: number;
+  likely_image_based: boolean;
+  note: string;
+}
+
+export interface CorpusSummary {
+  fact_count: number;
+  facts_by_type: Record<string, number>;
+  story_count: number;
+  unverified_story_count: number;
+  is_usable_for_matching: boolean;
+  readiness_note: string;
+}
+
+export interface Corpus {
+  facts: Fact[];
+  summary: CorpusSummary;
+}
+
+/** Observed demand for one term across the sampled postings. Counts, not scores. */
+export interface TermDemand {
+  term: string;
+  posting_count: number;
+  core_count: number;
+  is_technical: boolean;
+}
+
+export interface FactContribution {
+  fact_id: string;
+  fact_type: FactType;
+  title: string;
+  terms: TermDemand[];
+  /** Sampled postings mentioning at least one of this fact's terms. */
+  reach: number;
+  /** Of those, the ones no other fact reaches. */
+  unique_reach: number;
+  unmatched_term_count: number;
+}
+
+export interface Coverage {
+  sample_size: number;
+  is_meaningful: boolean;
+  /** The sample, stated plainly. Always render this beside the numbers. */
+  basis: string;
+  fact_count: number;
+  reached: number;
+  unreached: number;
+  contributions: FactContribution[];
+  gaps: TermDemand[];
+}
+
+// --- Onboarding ---
+
+export type SponsorshipStance = "needs_sponsorship" | "us_authorized" | "us_citizen";
+
+export interface Constraints {
+  preferred_locations: string[];
+  open_to_remote: boolean;
+  sponsorship: SponsorshipStance;
+  weekly_study_hours: number;
+  target_cycles: string[];
+}
+
+export interface TargetCompany {
+  id: string;
+  name: string;
+  canonical_name: string;
+  tier: string | null;
+  /** 1-4, higher is more selective. Never affected by marking a target. */
+  selectivity: number;
+}
+
+export type OnboardingStep =
+  | "upload_resume"
+  | "add_projects"
+  | "pick_targets"
+  | "set_constraints"
+  | "complete";
+
+export interface Onboarding {
+  next_step: OnboardingStep;
+  is_complete: boolean;
+  corpus: CorpusSummary;
+  target_company_count: number;
+  constraints_set: boolean;
+  constraints: Constraints | null;
+  targets: TargetCompany[];
+}
+
+export interface CompanySuggestion {
+  name: string;
+  canonical_name: string;
+  posting_count: number;
+  is_target: boolean;
+}
+
 export interface DiscoverParams {
   season?: Season[];
   role_family?: RoleFamily[];

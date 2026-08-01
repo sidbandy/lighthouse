@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api/client";
 import type { LaneBucket } from "./api/types";
+import { CorpusPage } from "./components/CorpusPage";
 import { FilterBar, type Filters } from "./components/FilterBar";
 import { Header, type View } from "./components/Header";
 import { LaneColumn } from "./components/LaneColumn";
@@ -36,11 +37,11 @@ export default function App() {
 
   const total = lanes.reduce((n, l) => n + l.count, 0);
 
-  if (view === "resume") {
+  if (view !== "discover") {
     return (
       <div className="min-h-full flex flex-col">
         <Header view={view} onView={setView} />
-        <ResumeCheck />
+        {view === "corpus" ? <CorpusPage /> : <ResumeCheck />}
       </div>
     );
   }

@@ -14,7 +14,14 @@ export default {
           600: "#33415e",
           500: "#475571",
         },
+        // Text ramp, brightest to quietest. 500/600 were used throughout the
+        // components before they existed here, which silently fell through to
+        // the inherited body colour — so the text meant to be quietest rendered
+        // *brighter* than the tier above it. They are defined now; keep the
+        // ramp monotonic if it ever grows again.
         mist: {
+          600: "#57617a",
+          500: "#6b7791",
           400: "#7c8aa5",
           300: "#9aa7bf",
           200: "#c3ccdb",

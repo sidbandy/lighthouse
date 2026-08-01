@@ -15,13 +15,15 @@ written silently, because the corpus must contain only real facts.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import asdict, dataclass, field
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from .config import get_settings
 from .corpus import CorpusSummary, FactInput, add_fact, summarize
-from .models import Company
+from .models import Company, OperatorProfile, OperatorTarget
 from .resume import ExtractedResume, extract_pdf
 
 # Sponsorship stance drives a top-level filter, so it is asked up front.
@@ -78,14 +80,34 @@ def commit_reviewed_facts(session: Session, facts: list[FactInput]) -> list:
     return [add_fact(session, fact.validated()) for fact in facts]
 
 
-def set_target_companies(session: Session, names: list[str]) -> int:
-    """Mark companies as targets.
+def set_target_companies(
+    session: Session,
+    names: list[str],
+    *,
+    replace: bool = True,
+    user_id: uuid.UUID | None = None,
+) -> int:
+    """Mark companies as targets for this operator.
 
     Reuses existing company rows where the name already appears in the ingested
     data, and creates a lightweight row otherwise, so a target the lists have
     not surfaced yet is still tracked.
+
+    Note what this deliberately does *not* touch: ``Company.tier``. Selectivity
+    is how hard a company is to get into, and wanting to work somewhere does not
+    make it easier. Writing both to one column previously demoted every marked
+    company to mid selectivity, which moved elite firms out of the Reach lane.
     """
     from ..ingest.normalize import canonical_company
+
+    uid = user_id or _operator_id()
+
+    if replace:
+        for existing in session.scalars(
+            select(OperatorTarget).where(OperatorTarget.user_id == uid)
+        ):
+            session.delete(existing)
+        session.flush()
 
     marked = 0
     for name in names:
@@ -96,24 +118,108 @@ def set_target_companies(session: Session, names: list[str]) -> int:
         if company is None:
             company = Company(name=name.strip(), canonical_name=canonical)
             session.add(company)
-        if company.tier is None:
-            company.tier = "target"
+            session.flush()
+        already = session.scalar(
+            select(OperatorTarget).where(
+                OperatorTarget.user_id == uid, OperatorTarget.company_id == company.id
+            )
+        )
+        if already is None:
+            session.add(OperatorTarget(user_id=uid, company_id=company.id))
         marked += 1
     session.flush()
     return marked
 
 
-def target_company_count(session: Session) -> int:
-    return int(session.scalar(select(func.count(Company.id)).where(Company.tier.isnot(None))) or 0)
+def target_companies(session: Session, *, user_id: uuid.UUID | None = None) -> list[Company]:
+    return list(
+        session.scalars(
+            select(Company)
+            .join(OperatorTarget, OperatorTarget.company_id == Company.id)
+            .where(OperatorTarget.user_id == (user_id or _operator_id()))
+            .order_by(Company.name)
+        )
+    )
+
+
+def target_company_count(session: Session, *, user_id: uuid.UUID | None = None) -> int:
+    return int(
+        session.scalar(
+            select(func.count(OperatorTarget.id)).where(
+                OperatorTarget.user_id == (user_id or _operator_id())
+            )
+        )
+        or 0
+    )
+
+
+def _operator_id() -> uuid.UUID:
+    return get_settings().operator_id
+
+
+def load_constraints(
+    session: Session, *, user_id: uuid.UUID | None = None
+) -> OperatorConstraints | None:
+    """The operator's saved constraints, or ``None`` if they never set any.
+
+    ``None`` and "saved but empty" are genuinely different states -- the first
+    means onboarding still has a step to go, the second means the operator
+    looked at the question and answered it -- so the absence is preserved rather
+    than being papered over with defaults.
+    """
+    profile = session.scalar(
+        select(OperatorProfile).where(OperatorProfile.user_id == (user_id or _operator_id()))
+    )
+    if profile is None:
+        return None
+    return OperatorConstraints(
+        preferred_locations=list(profile.preferred_locations or []),
+        open_to_remote=profile.open_to_remote,
+        sponsorship=profile.sponsorship,
+        weekly_study_hours=profile.weekly_study_hours,
+        target_cycles=list(profile.target_cycles or []),
+    )
+
+
+def save_constraints(
+    session: Session, constraints: OperatorConstraints, *, user_id: uuid.UUID | None = None
+) -> OperatorProfile:
+    """Upsert the operator's constraints. One row per operator, by design."""
+    if constraints.sponsorship not in SPONSORSHIP_CHOICES:
+        raise ValueError(
+            f"sponsorship must be one of {list(SPONSORSHIP_CHOICES)}, "
+            f"got {constraints.sponsorship!r}"
+        )
+    if constraints.weekly_study_hours < 0:
+        raise ValueError("weekly_study_hours cannot be negative")
+
+    uid = user_id or _operator_id()
+    profile = session.scalar(select(OperatorProfile).where(OperatorProfile.user_id == uid))
+    if profile is None:
+        profile = OperatorProfile(user_id=uid)
+        session.add(profile)
+
+    profile.preferred_locations = [
+        loc.strip() for loc in constraints.preferred_locations if loc.strip()
+    ]
+    profile.open_to_remote = constraints.open_to_remote
+    profile.sponsorship = constraints.sponsorship
+    profile.weekly_study_hours = constraints.weekly_study_hours
+    profile.target_cycles = [c.strip() for c in constraints.target_cycles if c.strip()]
+    session.flush()
+    return profile
 
 
 def onboarding_state(
     session: Session, *, constraints: OperatorConstraints | None = None
 ) -> OnboardingState:
+    """Where setup stands. Constraints are read from storage unless supplied."""
+    if constraints is None:
+        constraints = load_constraints(session)
     return OnboardingState(
         corpus=summarize(session),
         target_company_count=target_company_count(session),
-        constraints_set=constraints is not None and bool(constraints.preferred_locations),
+        constraints_set=constraints is not None,
     )
 
 

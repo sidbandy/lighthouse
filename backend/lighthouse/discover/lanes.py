@@ -25,18 +25,22 @@ from enum import StrEnum
 
 # Company selectivity tiers. Hand-maintained; the operator can edit these.
 # Higher tier = more selective. Kept deliberately small and legible.
+# A tier answers one question only: how hard is this company to get into. It
+# deliberately says nothing about whether the operator wants to work there --
+# that is the personal ``operator_targets`` table. Folding the two together once
+# demoted every company the operator marked as a target down to mid selectivity,
+# so wanting Jane Street moved it out of Reach and into Target. Wanting never
+# moves the bar.
 TIER_ELITE = "elite"  # FAANG-tier, top quant (Jane Street, Citadel, ...)
 TIER_HIGH = "high"  # strong tech / well-known unicorns
 TIER_MID = "mid"  # solid mid-size and growth companies
 TIER_ACCESSIBLE = "accessible"  # smaller / less competitive
-TIER_TARGET = "target"  # operator-marked target, selectivity unknown
 
 _TIER_SELECTIVITY: dict[str, int] = {
     TIER_ELITE: 4,
     TIER_HIGH: 3,
     TIER_MID: 2,
     TIER_ACCESSIBLE: 1,
-    TIER_TARGET: 2,
 }
 
 # Seed tiers for companies that dominate a campus search. Keyed by canonical
