@@ -50,7 +50,7 @@ export default function App() {
     <div className="min-h-full flex flex-col">
       <Header view={view} onView={setView} />
 
-      <div className="px-6 py-4 border-b border-ink-800/60">
+      <div className="px-6 py-4 border-b border-navy-200/60">
         <FilterBar filters={filters} onChange={setFilters} />
       </div>
 
@@ -60,8 +60,8 @@ export default function App() {
         {error && (
           <CenteredNote>
             <p className="text-bad">Could not reach the API.</p>
-            <p className="text-2xs text-mist-400 mt-1">
-              Is the backend running on :8077? <code className="text-mist-300">make dev</code>
+            <p className="text-2xs text-navy-500 mt-1">
+              Is the backend running on :8077? <code className="text-navy-600">make dev</code>
             </p>
           </CenteredNote>
         )}
@@ -69,7 +69,7 @@ export default function App() {
         {!loading && !error && total === 0 && (
           <CenteredNote>
             <p>No postings match these filters.</p>
-            <p className="text-2xs text-mist-400 mt-1">
+            <p className="text-2xs text-navy-500 mt-1">
               Try clearing filters, or run an ingest to refresh the list.
             </p>
           </CenteredNote>
@@ -91,7 +91,7 @@ export default function App() {
 
 function CenteredNote({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center text-sm text-mist-300 py-24">
+    <div className="flex flex-col items-center justify-center text-center text-sm text-navy-600 py-24">
       {children}
     </div>
   );

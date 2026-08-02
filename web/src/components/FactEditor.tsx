@@ -87,8 +87,7 @@ export function FactEditor({
         placeholder={
           factType === "skill" ? "e.g. PostgreSQL" : "e.g. Ledger — personal finance tracker"
         }
-        className="w-full text-sm bg-ink-950 border border-ink-700 rounded-lg px-2.5 py-2
-                   text-mist-100 placeholder:text-mist-500 focus:border-ink-600 outline-none"
+        className="field text-sm"
       />
 
       {factType !== "skill" || body ? (
@@ -96,14 +95,12 @@ export function FactEditor({
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder={BODY_PLACEHOLDER[factType]}
-          className="w-full h-24 text-xs bg-ink-950 border border-ink-700 rounded-lg p-2.5
-                     text-mist-200 placeholder:text-mist-500 focus:border-ink-600 outline-none resize-y
-                     leading-relaxed"
+          className="field text-xs h-24 resize-y leading-relaxed"
         />
       ) : (
         <button
           onClick={() => setBody(" ")}
-          className="text-2xs text-mist-500 hover:text-mist-300 transition-colors"
+          className="text-2xs text-navy-400 hover:text-navy-600 transition-colors"
         >
           + add detail
         </button>
@@ -116,7 +113,7 @@ export function FactEditor({
         <button onClick={onCancel} className="btn-ghost text-xs">
           Cancel
         </button>
-        <span className="text-2xs text-mist-500 ml-auto">⌘↵ to save · esc to cancel</span>
+        <span className="text-2xs text-navy-400 ml-auto">⌘↵ to save · esc to cancel</span>
       </div>
     </div>
   );

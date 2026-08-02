@@ -42,7 +42,7 @@ export function TailorPanel({ postingId }: { postingId: string }) {
   return (
     <section className="card p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-2xs font-600 uppercase tracking-wide text-mist-300">
+        <h3 className="text-2xs font-600 uppercase tracking-wide text-navy-600">
           Tailor to this posting
         </h3>
         {report && <Coverage report={report} />}
@@ -52,8 +52,7 @@ export function TailorPanel({ postingId }: { postingId: string }) {
         value={resumeText}
         onChange={(e) => setResumeText(e.target.value)}
         placeholder="Optional: paste your résumé text to see what's already on it vs. what you have but left off. Without it, this still shows what the posting wants and what your corpus can back."
-        className="w-full h-20 text-xs bg-ink-950 border border-ink-700 rounded-lg p-2.5
-                   text-mist-200 placeholder:text-mist-500 focus:border-ink-600 outline-none resize-y"
+        className="field text-xs h-20 resize-y"
       />
       <button onClick={run} disabled={loading} className="btn-primary w-full">
         {loading ? "Reading the posting…" : report ? "Re-run" : "Analyze fit"}
@@ -63,14 +62,14 @@ export function TailorPanel({ postingId }: { postingId: string }) {
 
       {report && (
         <div className="space-y-4 animate-fade-in">
-          <p className="text-xs text-mist-300 leading-relaxed">{report.summary}</p>
+          <p className="text-xs text-navy-600 leading-relaxed">{report.summary}</p>
 
           {report.hard_requirements.length > 0 && (
             <Group title="Knockouts — check you clear these" tone="warn">
               {report.hard_requirements.map((h) => (
-                <div key={h.kind} className="text-xs text-mist-300">
+                <div key={h.kind} className="text-xs text-navy-600">
                   <span className="text-warn font-600">{h.label}:</span>{" "}
-                  <span className="text-mist-400 italic">“{h.detail}”</span>
+                  <span className="text-navy-500 italic">“{h.detail}”</span>
                 </div>
               ))}
             </Group>
@@ -128,9 +127,9 @@ function Coverage({ report }: { report: TailorReport }) {
   const { coverage, potential_coverage } = report;
   return (
     <div className="text-right" title="Weighted share of the posting's requirements your corpus can evidence">
-      <span className="font-mono font-600 text-beacon-400 tabular-nums">{coverage}%</span>
+      <span className="font-mono font-600 text-beacon-600 tabular-nums">{coverage}%</span>
       {potential_coverage > coverage && (
-        <span className="text-2xs text-mist-400"> → {potential_coverage}% with edits</span>
+        <span className="text-2xs text-navy-500"> → {potential_coverage}% with edits</span>
       )}
     </div>
   );
@@ -140,7 +139,7 @@ const TONE_CHIP: Record<string, string> = {
   good: "border-good/30 bg-good/5 text-good/90",
   reword: "border-safety/30 bg-safety/5 text-safety/90",
   bad: "border-bad/30 bg-bad/5 text-bad/90",
-  neutral: "border-ink-600 bg-ink-800 text-mist-300",
+  neutral: "border-navy-300 bg-navy-100 text-navy-600",
 };
 
 function ReqGroup({
@@ -174,11 +173,11 @@ function ReqGroup({
             <div key={r.term} className="text-xs">
               <div className="flex items-baseline gap-1.5">
                 <span className={`chip ${TONE_CHIP[tone]}`}>{r.term}</span>
-                <span className="text-2xs text-mist-500">
+                <span className="text-2xs text-navy-400">
                   {TIER_LABEL[r.tier]} · seen {r.posting_count}×
                 </span>
               </div>
-              <p className="text-mist-400 mt-1 leading-snug">{r.advice}</p>
+              <p className="text-navy-500 mt-1 leading-snug">{r.advice}</p>
             </div>
           ))}
         </div>
@@ -201,10 +200,10 @@ function Group({
   return (
     <div>
       <div className="mb-1.5">
-        <span className={`text-2xs font-600 ${tone === "warn" ? "text-warn" : "text-mist-200"}`}>
+        <span className={`text-2xs font-600 ${tone === "warn" ? "text-warn" : "text-navy-800"}`}>
           {title}
         </span>
-        {hint && <span className="text-2xs text-mist-500"> · {hint}</span>}
+        {hint && <span className="text-2xs text-navy-400"> · {hint}</span>}
       </div>
       {children}
     </div>

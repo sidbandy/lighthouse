@@ -35,8 +35,8 @@ export function ResumeCheck() {
   return (
     <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
       <div>
-        <h1 className="text-lg font-700 text-mist-100">Will your resume reach a human?</h1>
-        <p className="text-sm text-mist-400 mt-1">
+        <h1 className="text-lg font-700 text-navy-900">Will your resume reach a human?</h1>
+        <p className="text-sm text-navy-500 mt-1">
           Before a recruiter sees it, an ATS extracts your resume into text. If that extraction
           garbles or drops your content, you are rejected by a machine. This checks the extraction
           the way the parser does — and shows you exactly what it sees.
@@ -56,7 +56,7 @@ export function ResumeCheck() {
         }}
         className={`card flex flex-col items-center justify-center py-10 cursor-pointer border-dashed
                     transition-colors ${
-                      dragging ? "border-beacon-500 bg-beacon-glow" : "hover:border-ink-600"
+                      dragging ? "border-beacon-500 bg-beacon-glow" : "hover:border-navy-300"
                     }`}
       >
         <input
@@ -66,15 +66,15 @@ export function ResumeCheck() {
           className="hidden"
           onChange={(e) => e.target.files?.[0] && run(e.target.files[0])}
         />
-        <div className="text-2xl mb-2 text-mist-400">↑</div>
-        <p className="text-sm text-mist-200">
-          {fileName ? <span className="text-mist-100">{fileName}</span> : "Drop your resume PDF here"}
+        <div className="text-2xl mb-2 text-navy-500">↑</div>
+        <p className="text-sm text-navy-800">
+          {fileName ? <span className="text-navy-900">{fileName}</span> : "Drop your resume PDF here"}
         </p>
-        <p className="text-2xs text-mist-400 mt-1">or click to choose · nothing is stored</p>
+        <p className="text-2xs text-navy-500 mt-1">or click to choose · nothing is stored</p>
       </label>
 
       {loading && (
-        <div className="text-center text-sm text-mist-400 py-6">Reading it the way an ATS would…</div>
+        <div className="text-center text-sm text-navy-500 py-6">Reading it the way an ATS would…</div>
       )}
 
       {error && (
@@ -86,7 +86,7 @@ export function ResumeCheck() {
           <Verdict report={report} />
           {report.preview && <ParsePreview preview={report.preview} />}
           <div>
-            <h3 className="text-2xs font-600 uppercase tracking-wide text-mist-300 mb-2">
+            <h3 className="text-2xs font-600 uppercase tracking-wide text-navy-600 mb-2">
               {report.findings.length > 0 ? "What to fix, worst first" : "Findings"}
             </h3>
             <AtsFindings findings={report.findings} />
@@ -108,8 +108,8 @@ function Verdict({ report }: { report: AtsReport }) {
       <div className="flex items-center gap-3">
         <span className={`text-2xl ${clean ? "text-good" : "text-bad"}`}>{clean ? "✓" : "✕"}</span>
         <div>
-          <p className="text-sm font-600 text-mist-100">{report.verdict}</p>
-          <p className="text-2xs text-mist-400 mt-0.5">
+          <p className="text-sm font-600 text-navy-900">{report.verdict}</p>
+          <p className="text-2xs text-navy-500 mt-0.5">
             {report.page_count} page{report.page_count !== 1 ? "s" : ""} · {report.word_count} words
             extracted · {report.fonts.length} font{report.fonts.length !== 1 ? "s" : ""}
           </p>

@@ -17,7 +17,7 @@ const SEVERITY: Record<string, { color: string; ring: string; label: string; mar
     label: "Degrades the parse",
     mark: "!",
   },
-  MINOR: { color: "text-mist-400", ring: "border-ink-700 bg-ink-850", label: "Polish", mark: "•" },
+  MINOR: { color: "text-navy-500", ring: "border-navy-200 bg-navy-50", label: "Polish", mark: "•" },
 };
 
 export function AtsFindings({ findings }: { findings: AtsFinding[] }) {
@@ -25,7 +25,7 @@ export function AtsFindings({ findings }: { findings: AtsFinding[] }) {
     return (
       <div className="card p-5 text-center">
         <div className="text-good text-2xl mb-1">✓</div>
-        <p className="text-sm text-mist-200">Nothing to fix. This resume parses cleanly.</p>
+        <p className="text-sm text-navy-800">Nothing to fix. This resume parses cleanly.</p>
       </div>
     );
   }
@@ -39,18 +39,18 @@ export function AtsFindings({ findings }: { findings: AtsFinding[] }) {
               <span className={`${s.color} font-700 mt-0.5`}>{s.mark}</span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2 flex-wrap">
-                  <h4 className="text-sm font-600 text-mist-100">{f.title}</h4>
+                  <h4 className="text-sm font-600 text-navy-900">{f.title}</h4>
                   <span className={`text-2xs font-500 ${s.color}`}>{s.label}</span>
                 </div>
-                <p className="text-xs text-mist-400 mt-1 leading-relaxed">{f.detail}</p>
+                <p className="text-xs text-navy-500 mt-1 leading-relaxed">{f.detail}</p>
                 {f.evidence && (
-                  <div className="mt-2 text-2xs font-mono text-mist-300 bg-ink-950 border border-ink-700 rounded px-2 py-1 overflow-x-auto">
+                  <div className="mt-2 text-2xs font-mono text-navy-600 bg-paper border border-navy-200 rounded px-2 py-1 overflow-x-auto">
                     {f.evidence}
                   </div>
                 )}
                 <div className="mt-2 flex items-start gap-1.5 text-xs">
-                  <span className="text-beacon-400 font-600 shrink-0">Fix</span>
-                  <span className="text-mist-300">{f.fix}</span>
+                  <span className="text-beacon-600 font-600 shrink-0">Fix</span>
+                  <span className="text-navy-600">{f.fix}</span>
                 </div>
               </div>
             </div>

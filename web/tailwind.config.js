@@ -4,45 +4,51 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Cool slate base — a calm, focused workspace rather than stark black.
-        ink: {
-          950: "#0a0e16",
-          900: "#0f1420",
-          850: "#141b2b",
-          800: "#1a2233",
-          700: "#242f45",
-          600: "#33415e",
-          500: "#475571",
+        // A lighthouse: a white tower, a navy sea, one warm light. Three
+        // colours, used in that order of quantity — most of the screen is
+        // paper, structure and type are navy, and the beacon is spent only on
+        // the single thing that matters in a given view.
+        //
+        // One ramp for everything structural, ordered the conventional way:
+        // low numbers are light fills and borders, high numbers are type.
+        // Keep it monotonic.
+        navy: {
+          50: "#f1f5f9",
+          100: "#e3eaf1",
+          200: "#cbd7e3",
+          300: "#a6bacd",
+          400: "#7893ad",
+          500: "#56738f",
+          600: "#3d5a75",
+          700: "#2a4359",
+          800: "#1a2f42",
+          900: "#0e1e2d",
         },
-        // Text ramp, brightest to quietest. 500/600 were used throughout the
-        // components before they existed here, which silently fell through to
-        // the inherited body colour — so the text meant to be quietest rendered
-        // *brighter* than the tier above it. They are defined now; keep the
-        // ramp monotonic if it ever grows again.
-        mist: {
-          600: "#57617a",
-          500: "#6b7791",
-          400: "#7c8aa5",
-          300: "#9aa7bf",
-          200: "#c3ccdb",
-          100: "#e4e9f1",
-        },
-        // The beacon: a warm signal against the cool base. Used sparingly, for
-        // the thing that matters on a screen.
+        // The light itself. Reserved for the primary action, the live figure,
+        // and the one row worth looking at first — never for decoration.
         beacon: {
-          600: "#d98a1f",
-          500: "#f0a52e",
-          400: "#f6bd5c",
-          glow: "rgba(240, 165, 46, 0.14)",
+          100: "#fdecd8",
+          300: "#f9bd77",
+          400: "#f5a24a",
+          500: "#ef8420",
+          600: "#cc6710", // the text-safe step: ~4.4:1 on white
+          700: "#a44f09",
+          glow: "rgba(239, 132, 32, 0.10)",
         },
-        // Lane accents — distinct but not loud.
-        reach: "#c084fc",
-        target: "#5eead4",
-        safety: "#7dd3fc",
-        // Semantic.
-        good: "#4ade80",
-        warn: "#fbbf24",
-        bad: "#f87171",
+        // The page: warm cream, not white. Chart paper rather than a screen —
+        // it takes the glare off a tool meant to be stared at for hours, and it
+        // is what makes the navy read as ink and the beacon as lamplight. Cards
+        // sit on top in white and lift by a hair.
+        paper: "#faf7f0",
+        // Lane accents — distinct at a glance, all dark enough to read as type.
+        reach: "#6d28d9",
+        target: "#0f766e",
+        safety: "#0369a1",
+        // Semantic, at text weight rather than the pastel tints a dark
+        // background could afford.
+        good: "#15803d",
+        warn: "#b45309",
+        bad: "#b91c1c",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],
@@ -54,9 +60,11 @@ export default {
       borderRadius: {
         xl: "0.875rem",
       },
+      // Tinted with the navy rather than neutral black, so shadows read as
+      // depth in the same light the rest of the palette lives in.
       boxShadow: {
-        card: "0 1px 2px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.15)",
-        lift: "0 8px 24px rgba(0,0,0,0.35)",
+        card: "0 1px 2px rgba(14,30,45,0.04), 0 1px 3px rgba(14,30,45,0.06)",
+        lift: "0 8px 24px rgba(14,30,45,0.12), 0 2px 6px rgba(14,30,45,0.06)",
       },
       keyframes: {
         "fade-in": {

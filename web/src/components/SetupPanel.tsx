@@ -100,8 +100,8 @@ function TargetPicker({
   return (
     <section className="card p-4 space-y-3">
       <div>
-        <h3 className="text-sm font-600 text-mist-100">Target companies</h3>
-        <p className="text-2xs text-mist-400 mt-0.5">
+        <h3 className="text-sm font-600 text-navy-900">Target companies</h3>
+        <p className="text-2xs text-navy-500 mt-0.5">
           Places you actually want. Marking one never changes how selective it is — Lighthouse
           won't tell you a reach is realistic because you'd like it to be.
         </p>
@@ -112,8 +112,7 @@ function TargetPicker({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search companies…"
-          className="w-full text-xs bg-ink-950 border border-ink-700 rounded-lg px-2.5 py-2
-                     text-mist-100 placeholder:text-mist-500 focus:border-ink-600 outline-none"
+          className="field text-xs"
         />
         {results.length > 0 && (
           <div className="absolute z-20 mt-1 w-full card p-1 shadow-lift max-h-56 overflow-y-auto">
@@ -123,10 +122,10 @@ function TargetPicker({
                 onClick={() => add(r.name)}
                 disabled={r.is_target}
                 className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md
-                           text-left hover:bg-ink-800 disabled:opacity-40 transition-colors"
+                           text-left hover:bg-navy-100 disabled:opacity-40 transition-colors"
               >
-                <span className="text-xs text-mist-200 truncate">{r.name}</span>
-                <span className="text-2xs text-mist-500 shrink-0 tabular-nums">
+                <span className="text-xs text-navy-800 truncate">{r.name}</span>
+                <span className="text-2xs text-navy-400 shrink-0 tabular-nums">
                   {r.is_target ? "already a target" : `${r.posting_count} live`}
                 </span>
               </button>
@@ -138,7 +137,7 @@ function TargetPicker({
       {error && <p className="text-2xs text-bad">{error}</p>}
 
       {targets.length === 0 ? (
-        <p className="text-2xs text-mist-500">
+        <p className="text-2xs text-navy-400">
           No targets yet. They seed the three-lane view and tell Lighthouse which boards to poll
           directly.
         </p>
@@ -147,15 +146,15 @@ function TargetPicker({
           {targets.map((t) => (
             <span
               key={t.id}
-              className="chip border-ink-600 bg-ink-800 group"
+              className="chip border-navy-300 bg-navy-100 group"
               title={`Selectivity ${t.selectivity}/4 — ${SELECTIVITY_LABEL[t.selectivity] ?? "unknown"}`}
             >
-              <span className="text-mist-200">{t.name}</span>
-              <span className="text-mist-500">{SELECTIVITY_LABEL[t.selectivity] ?? "—"}</span>
+              <span className="text-navy-800">{t.name}</span>
+              <span className="text-navy-400">{SELECTIVITY_LABEL[t.selectivity] ?? "—"}</span>
               <button
                 onClick={() => remove(t.name)}
                 disabled={saving}
-                className="text-mist-500 hover:text-bad transition-colors ml-0.5"
+                className="text-navy-400 hover:text-bad transition-colors ml-0.5"
               >
                 ×
               </button>
@@ -214,26 +213,25 @@ function ConstraintsForm({
   return (
     <section className="card p-4 space-y-3">
       <div>
-        <h3 className="text-sm font-600 text-mist-100">What you're looking for</h3>
-        <p className="text-2xs text-mist-400 mt-0.5">
+        <h3 className="text-sm font-600 text-navy-900">What you're looking for</h3>
+        <p className="text-2xs text-navy-500 mt-0.5">
           Seeds your filters and, later, the study plan.
         </p>
       </div>
 
       <label className="block">
-        <span className="text-2xs text-mist-400">Preferred locations</span>
+        <span className="text-2xs text-navy-500">Preferred locations</span>
         <input
           value={locationText}
           onChange={(e) => setLocationText(e.target.value)}
           placeholder="Austin TX, New York, Remote"
-          className="w-full mt-1 text-xs bg-ink-950 border border-ink-700 rounded-lg px-2.5 py-2
-                     text-mist-100 placeholder:text-mist-500 focus:border-ink-600 outline-none"
+          className="field text-xs mt-1"
         />
-        <span className="text-2xs text-mist-500">comma separated</span>
+        <span className="text-2xs text-navy-400">comma separated</span>
       </label>
 
       <div>
-        <span className="text-2xs text-mist-400">Work authorization</span>
+        <span className="text-2xs text-navy-500">Work authorization</span>
         <div className="flex flex-col gap-1 mt-1">
           {SPONSORSHIP.map((s) => (
             <button
@@ -242,17 +240,17 @@ function ConstraintsForm({
               className={`text-left px-2.5 py-1.5 rounded-lg border transition-colors ${
                 draft.sponsorship === s.value
                   ? "border-beacon-500/50 bg-beacon-glow"
-                  : "border-ink-700 hover:border-ink-600"
+                  : "border-navy-200 hover:border-navy-300"
               }`}
             >
               <div
                 className={`text-xs ${
-                  draft.sponsorship === s.value ? "text-beacon-400" : "text-mist-200"
+                  draft.sponsorship === s.value ? "text-beacon-600" : "text-navy-800"
                 }`}
               >
                 {s.label}
               </div>
-              <div className="text-2xs text-mist-500">{s.hint}</div>
+              <div className="text-2xs text-navy-400">{s.hint}</div>
             </button>
           ))}
         </div>
@@ -266,10 +264,10 @@ function ConstraintsForm({
             onChange={(e) => setDraft({ ...draft, open_to_remote: e.target.checked })}
             className="accent-beacon-500 cursor-pointer"
           />
-          <span className="text-xs text-mist-300">Open to remote</span>
+          <span className="text-xs text-navy-600">Open to remote</span>
         </label>
         <label className="flex items-center gap-2">
-          <span className="text-xs text-mist-300">Study hrs/week</span>
+          <span className="text-xs text-navy-600">Study hrs/week</span>
           <input
             type="number"
             min={0}
@@ -278,8 +276,7 @@ function ConstraintsForm({
             onChange={(e) =>
               setDraft({ ...draft, weekly_study_hours: Number(e.target.value) || 0 })
             }
-            className="w-16 text-xs bg-ink-950 border border-ink-700 rounded px-2 py-1
-                       text-mist-100 focus:border-ink-600 outline-none tabular-nums"
+            className="field text-xs w-16 px-2 py-1 tabular-nums"
           />
         </label>
       </div>

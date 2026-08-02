@@ -52,10 +52,13 @@ const TERM_RULE_LABELS: Record<string, string> = {
 
 export const termRuleLabel = (rule: string): string => TERM_RULE_LABELS[rule] ?? rule;
 
+/** Colour for a match score, on the light surface. Only a genuinely strong
+ *  score earns the beacon; a weak one stays navy rather than turning red,
+ *  because a low match is information, not a failure. */
 export function scoreColor(score: number): string {
-  if (score >= 45) return "text-target";
-  if (score >= 20) return "text-beacon-400";
-  return "text-mist-400";
+  if (score >= 45) return "text-beacon-600";
+  if (score >= 20) return "text-navy-700";
+  return "text-navy-400";
 }
 
 // Source ids like "ats_greenhouse_janestreet" -> "Jane Street board"; list

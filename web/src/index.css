@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   html,
@@ -16,12 +16,19 @@
   }
 
   body {
-    @apply bg-ink-950 text-mist-200 font-sans antialiased;
+    @apply bg-paper text-navy-800 font-sans antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "ss01";
   }
 
   ::selection {
-    @apply bg-beacon-500/25 text-mist-100;
+    @apply bg-beacon-500/25 text-navy-900;
+  }
+
+  /* One visible focus ring for everything interactive. On a light surface a
+     keyboard user has no other way to tell where they are, and the browser
+     default is invisible against paper. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-beacon-500/60 ring-offset-2 ring-offset-paper rounded-md;
   }
 
   /* A quiet scrollbar that matches the workspace. */
@@ -33,42 +40,85 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-ink-700 rounded-full border-2 border-solid border-transparent bg-clip-padding;
+    @apply bg-navy-200 rounded-full border-2 border-solid border-transparent bg-clip-padding;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-ink-600;
+    @apply bg-navy-300;
   }
 }
 
 @layer components {
+  /* White on paper: the lift comes from the shadow, with a hairline border so
+     cards still read as separate where they touch. */
   .card {
-    @apply bg-ink-900 border border-ink-700/70 rounded-xl shadow-card;
+    @apply bg-white border border-navy-200 rounded-xl shadow-card;
   }
 
   .chip {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-medium
-           border border-ink-700 bg-ink-850 text-mist-300;
+           border border-navy-200 bg-navy-50 text-navy-600;
   }
 
   .btn {
     @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-sm
            font-medium transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed;
   }
+  /* The beacon is spent here and almost nowhere else — one primary action per
+     view, so it always means "this is the thing to do next". */
   .btn-primary {
-    @apply btn bg-beacon-500 text-ink-950 hover:bg-beacon-400;
+    @apply btn bg-beacon-500 text-white shadow-sm hover:bg-beacon-600;
   }
   .btn-ghost {
-    @apply btn text-mist-300 hover:text-mist-100 hover:bg-ink-800;
+    @apply btn text-navy-600 hover:text-navy-900 hover:bg-navy-100;
   }
   .btn-toggle {
-    @apply btn border border-ink-700 text-mist-300 hover:border-ink-600 hover:text-mist-100;
+    @apply btn border border-navy-200 bg-white text-navy-600
+           hover:border-navy-300 hover:text-navy-900;
   }
   .btn-toggle-on {
-    @apply btn border border-beacon-500/50 bg-beacon-glow text-beacon-400;
+    @apply btn border border-beacon-500 bg-beacon-glow text-beacon-700;
+  }
+  /* Filters are a secondary control and there are a lot of them. Bordering
+     eighteen pills makes the filter bar louder than the postings it filters, so
+     they stay plain text until chosen and then commit to a solid navy. */
+  .btn-filter {
+    @apply btn font-normal text-navy-500 hover:text-navy-900 hover:bg-navy-100;
+  }
+  .btn-filter-on {
+    @apply btn bg-navy-800 text-white hover:bg-navy-900;
   }
 
   .meter {
-    @apply h-1.5 rounded-full bg-ink-700 overflow-hidden;
+    @apply h-1.5 rounded-full bg-navy-100 overflow-hidden;
+  }
+
+  /* A term and its count. Flat, marked by a rule on one edge rather than boxed
+     into a pill: there are routinely thirty of these on screen at once, and
+     thirty rounded outlines read as decoration instead of as data. The rule
+     colour carries the bucket, so a list stays scannable without a legend. */
+  .term {
+    @apply inline-flex items-baseline gap-1.5 border-l-2 pl-1.5 pr-1 py-px
+           text-xs leading-5 text-navy-700;
+  }
+  .term-count {
+    @apply text-2xs tabular-nums text-navy-400;
+  }
+
+  /* Section label with a hairline carrying on across the remaining width, so
+     groups separate by typography rather than by another border box. */
+  .rule-label {
+    @apply flex items-center gap-2 text-2xs font-600 uppercase tracking-wider text-navy-500;
+  }
+  .rule-label::after {
+    content: "";
+    @apply flex-1 h-px bg-navy-200;
+  }
+
+  /* Every text input on the page, so they cannot drift apart. */
+  .field {
+    @apply w-full bg-white border border-navy-200 rounded-lg px-2.5 py-2 text-navy-900
+           placeholder:text-navy-400 outline-none transition-colors
+           hover:border-navy-300 focus:border-beacon-500;
   }
 }
 

@@ -137,7 +137,7 @@ export function CorpusPage() {
     return (
       <CenteredNote>
         <p className="text-bad">Could not reach the API.</p>
-        <p className="text-2xs text-mist-400 mt-1">Is the backend running on :8077?</p>
+        <p className="text-2xs text-navy-500 mt-1">Is the backend running on :8077?</p>
       </CenteredNote>
     );
   }
@@ -154,8 +154,8 @@ export function CorpusPage() {
     <div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-700 text-mist-100">Your corpus</h1>
-          <p className="text-sm text-mist-400 mt-1 max-w-2xl">
+          <h1 className="text-lg font-700 text-navy-900">Your corpus</h1>
+          <p className="text-sm text-navy-500 mt-1 max-w-2xl">
             Every real thing you've done, in one place. Match scoring, the résumé tailor and your
             interview stories all read from here — which is what stops your résumé and your answers
             telling two different versions of the same history.
@@ -171,10 +171,10 @@ export function CorpusPage() {
       {!onboarding.is_complete && (
         <div className="card p-4 border-beacon-500/30 bg-beacon-glow">
           <div className="flex items-start gap-3">
-            <span className="text-beacon-400 text-sm mt-0.5">→</span>
+            <span className="text-beacon-600 text-sm mt-0.5">→</span>
             <div className="flex-1">
-              <p className="text-sm font-600 text-mist-100">{step.title}</p>
-              <p className="text-xs text-mist-300 mt-1 leading-relaxed">{step.detail}</p>
+              <p className="text-sm font-600 text-navy-900">{step.title}</p>
+              <p className="text-xs text-navy-600 mt-1 leading-relaxed">{step.detail}</p>
               {(onboarding.next_step === "pick_targets" ||
                 onboarding.next_step === "set_constraints") &&
                 !showSetup && (
@@ -217,7 +217,7 @@ export function CorpusPage() {
       />
 
       <div className="flex items-center justify-between">
-        <p className="text-2xs text-mist-400">{corpus.summary.readiness_note}</p>
+        <p className="text-2xs text-navy-500">{corpus.summary.readiness_note}</p>
         {!adding && (
           <button onClick={() => setAdding(true)} className="btn-toggle text-xs">
             + Add a fact
@@ -239,7 +239,7 @@ export function CorpusPage() {
       {empty ? (
         <CenteredNote>
           <p>Nothing here yet.</p>
-          <p className="text-2xs text-mist-400 mt-1">
+          <p className="text-2xs text-navy-500 mt-1">
             Import a résumé above, or add your first project by hand.
           </p>
         </CenteredNote>
@@ -259,7 +259,7 @@ export function CorpusPage() {
 
 function CenteredNote({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center text-sm text-mist-300 py-24">
+    <div className="flex flex-col items-center justify-center text-center text-sm text-navy-600 py-24">
       {children}
     </div>
   );

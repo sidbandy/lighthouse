@@ -83,7 +83,7 @@ export function ResumeImport({ onImported }: { onImported: (count: number) => vo
           }}
           className={`card flex flex-col items-center justify-center py-8 cursor-pointer border-dashed
                       transition-colors ${
-                        dragging ? "border-beacon-500 bg-beacon-glow" : "hover:border-ink-600"
+                        dragging ? "border-beacon-500 bg-beacon-glow" : "hover:border-navy-300"
                       }`}
         >
           <input
@@ -92,21 +92,21 @@ export function ResumeImport({ onImported }: { onImported: (count: number) => vo
             className="hidden"
             onChange={(e) => e.target.files?.[0] && run(e.target.files[0])}
           />
-          <div className="text-xl mb-1.5 text-mist-400">↑</div>
-          <p className="text-sm text-mist-200">
+          <div className="text-xl mb-1.5 text-navy-500">↑</div>
+          <p className="text-sm text-navy-800">
             {fileName ? (
-              <span className="text-mist-100">{fileName}</span>
+              <span className="text-navy-900">{fileName}</span>
             ) : (
               "Start from your résumé"
             )}
           </p>
-          <p className="text-2xs text-mist-400 mt-1">
+          <p className="text-2xs text-navy-500 mt-1">
             drop a PDF or click · you review everything before it's saved
           </p>
         </label>
       )}
 
-      {loading && <p className="text-sm text-mist-400 text-center py-4">Reading your résumé…</p>}
+      {loading && <p className="text-sm text-navy-500 text-center py-4">Reading your résumé…</p>}
 
       {error && <div className="card border-bad/30 bg-bad/5 p-3 text-xs text-bad">{error}</div>}
 
@@ -114,17 +114,17 @@ export function ResumeImport({ onImported }: { onImported: (count: number) => vo
         <div className="space-y-3 animate-fade-in">
           <div
             className={`card p-3 border ${
-              extraction.likely_image_based ? "border-warn/30 bg-warn/5" : "border-ink-700/70"
+              extraction.likely_image_based ? "border-warn/30 bg-warn/5" : "border-navy-200/70"
             }`}
           >
             <p
               className={`text-xs leading-relaxed ${
-                extraction.likely_image_based ? "text-warn" : "text-mist-300"
+                extraction.likely_image_based ? "text-warn" : "text-navy-600"
               }`}
             >
               {extraction.note}
             </p>
-            <p className="text-2xs text-mist-500 mt-1">
+            <p className="text-2xs text-navy-400 mt-1">
               {extraction.page_count} page{extraction.page_count !== 1 ? "s" : ""} ·{" "}
               {extraction.char_count.toLocaleString()} characters extracted
             </p>
@@ -133,7 +133,7 @@ export function ResumeImport({ onImported }: { onImported: (count: number) => vo
           {drafts.length > 0 && (
             <>
               <div className="flex items-center justify-between">
-                <span className="text-2xs text-mist-400">
+                <span className="text-2xs text-navy-500">
                   {kept.length} of {drafts.length} selected
                 </span>
                 <div className="flex gap-1">
@@ -228,28 +228,25 @@ function DraftRow({
               <input
                 value={draft.title}
                 onChange={(e) => onChange(draft.id, { title: e.target.value })}
-                className="w-full text-xs bg-ink-950 border border-ink-700 rounded px-2 py-1.5
-                           text-mist-100 focus:border-ink-600 outline-none"
+                className="field text-xs py-1.5"
               />
               <textarea
                 value={draft.body}
                 onChange={(e) => onChange(draft.id, { body: e.target.value })}
                 placeholder="Detail — correct anything the extractor got wrong."
-                className="w-full h-20 text-2xs bg-ink-950 border border-ink-700 rounded p-2
-                           text-mist-200 placeholder:text-mist-500 focus:border-ink-600 outline-none
-                           resize-y leading-relaxed"
+                className="field text-2xs h-20 resize-y leading-relaxed"
               />
             </div>
           ) : (
             <button onClick={() => setExpanded(true)} className="text-left w-full">
               <div className="flex items-baseline gap-2">
-                <span className="chip border-ink-700 text-mist-500 shrink-0">
+                <span className="chip border-navy-200 text-navy-400 shrink-0">
                   {draft.fact_type}
                 </span>
-                <span className="text-xs text-mist-200 truncate">{draft.title}</span>
+                <span className="text-xs text-navy-800 truncate">{draft.title}</span>
               </div>
               {draft.body && (
-                <p className="text-2xs text-mist-500 mt-1 line-clamp-2 leading-relaxed">
+                <p className="text-2xs text-navy-400 mt-1 line-clamp-2 leading-relaxed">
                   {draft.body}
                 </p>
               )}

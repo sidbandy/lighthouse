@@ -47,7 +47,7 @@ export function FilterBar({
         {ROLES.map((r) => (
           <button
             key={r}
-            className={filters.role === r ? "btn-toggle-on" : "btn-toggle"}
+            className={filters.role === r ? "btn-filter-on" : "btn-filter"}
             onClick={() => onChange({ ...filters, role: filters.role === r ? null : r })}
           >
             {roleLabel(r)}
@@ -55,13 +55,13 @@ export function FilterBar({
         ))}
       </div>
 
-      <span className="w-px h-5 bg-ink-700 mx-1" />
+      <span className="w-px h-5 bg-navy-200 mx-1" />
 
       <div className="flex gap-1">
         {SEASONS.map((s) => (
           <button
             key={s.value}
-            className={filters.season === s.value ? "btn-toggle-on" : "btn-toggle"}
+            className={filters.season === s.value ? "btn-filter-on" : "btn-filter"}
             onClick={() =>
               onChange({ ...filters, season: filters.season === s.value ? null : s.value })
             }
@@ -71,10 +71,10 @@ export function FilterBar({
         ))}
       </div>
 
-      <span className="w-px h-5 bg-ink-700 mx-1" />
+      <span className="w-px h-5 bg-navy-200 mx-1" />
 
       <button
-        className={filters.withDescriptionOnly ? "btn-toggle-on" : "btn-toggle"}
+        className={filters.withDescriptionOnly ? "btn-filter-on" : "btn-filter"}
         onClick={() => onChange({ ...filters, withDescriptionOnly: !filters.withDescriptionOnly })}
         title="Only postings with a full description, so match scores rest on real evidence"
       >
