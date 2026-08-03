@@ -1,6 +1,9 @@
-"""API shapes for the Track module: ATS check and per-posting tailoring."""
+"""API shapes for the Track module: ATS check, tailoring, and the application board."""
 
 from __future__ import annotations
+
+from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -70,3 +73,91 @@ class TailorReportOut(BaseModel):
     rewords: list[RequirementOut]
     evidenced: list[RequirementOut]
     other_gaps: list[RequirementOut]
+
+
+# --------------------------------------------------------------------------
+# Applications: the board and the funnel
+# --------------------------------------------------------------------------
+
+
+class StageEntryOut(BaseModel):
+    """One dated step. The date is the point — a stage without one cannot
+    answer how long anything took."""
+
+    event_type: str
+    stage: str
+    label: str
+    occurred_at: datetime
+    note: str = ""
+
+
+class ApplicationOut(BaseModel):
+    id: UUID
+    posting_id: UUID
+    posting_title: str
+    company_name: str
+    posting_url: str
+    term_label: str | None = None
+    location: str | None = None
+
+    stage: str
+    stage_label: str
+    is_live: bool
+    is_terminal: bool
+    timeline: list[StageEntryOut]
+    notes: str | None = None
+
+    days_silent: int | None = Field(
+        default=None,
+        description="Days since the last employer signal. A subtraction between "
+        "two real dates — never a probability of being ghosted.",
+    )
+    silence_note: str | None = None
+
+
+class StageCountOut(BaseModel):
+    stage: str
+    label: str
+    reached: int = Field(description="Applications that ever logged this exact stage.")
+    current: int = Field(description="Applications sitting here now.")
+
+
+class ConversionOut(BaseModel):
+    from_label: str
+    to_label: str
+    reached_from: int
+    reached_to: int
+    has_enough_data: bool
+    statement: str = Field(description="Pre-rendered, with both numbers always shown.")
+
+
+class WaitTimeOut(BaseModel):
+    from_label: str
+    to_label: str
+    sample_size: int
+    median_days: int | None
+    statement: str
+
+
+class FunnelOut(BaseModel):
+    total: int
+    has_enough_data: bool
+    basis: str = Field(description="The sample, stated plainly. Render beside the numbers.")
+    stages: list[StageCountOut]
+    conversions: list[ConversionOut]
+    waits: list[WaitTimeOut]
+
+
+class BoardOut(BaseModel):
+    applications: list[ApplicationOut]
+    funnel: FunnelOut
+
+
+class LogEventIn(BaseModel):
+    event_type: str = Field(description="saved | applied | assessment_received | … | accepted")
+    occurred_at: datetime | None = Field(
+        default=None,
+        description="When it actually happened. Defaults to now; pass the real "
+        "date when back-filling, because every wait-time figure depends on it.",
+    )
+    note: str = ""

@@ -18,7 +18,7 @@ function Beacon() {
   );
 }
 
-export type View = "discover" | "corpus" | "resume";
+export type View = "discover" | "track" | "corpus" | "resume";
 
 export function Header({ view, onView }: { view: View; onView: (v: View) => void }) {
   const [cycles, setCycles] = useState<CycleCount[]>([]);
@@ -49,6 +49,9 @@ export function Header({ view, onView }: { view: View; onView: (v: View) => void
         <nav className="flex items-center gap-1">
           <NavItem active={view === "discover"} onClick={() => onView("discover")}>
             Discover
+          </NavItem>
+          <NavItem active={view === "track"} onClick={() => onView("track")}>
+            Applications
           </NavItem>
           <NavItem active={view === "corpus"} onClick={() => onView("corpus")}>
             My corpus

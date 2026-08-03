@@ -14,18 +14,27 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from ..core import events as event_log
 from ..core.corpus import corpus_documents
 from ..core.db import get_session
-from ..core.models import Posting
+from ..core.models import Application, Posting
 from ..discover.match import build_index
-from . import ats_check, tailor
+from . import applications, ats_check, funnel, tailor
 from .schemas import (
+    ApplicationOut,
     AtsReportOut,
+    BoardOut,
+    ConversionOut,
     FindingOut,
+    FunnelOut,
     HardRequirementOut,
+    LogEventIn,
     ParsePreviewOut,
     RequirementOut,
+    StageCountOut,
+    StageEntryOut,
     TailorReportOut,
+    WaitTimeOut,
 )
 
 router = APIRouter(prefix="/api", tags=["track"])
@@ -154,3 +163,159 @@ def tailor_to_posting(
         evidenced=[_req_out(r) for r in report.evidenced],
         other_gaps=[_req_out(r) for r in report.gaps if r.tier is not tailor.Tier.REQUIRED],
     )
+
+
+# --------------------------------------------------------------------------
+# The application board
+# --------------------------------------------------------------------------
+
+
+def _application_out(state: applications.ApplicationState, posting: Posting) -> ApplicationOut:
+    return ApplicationOut(
+        id=state.application_id,
+        posting_id=state.posting_id,
+        posting_title=posting.title,
+        company_name=posting.company.name if posting.company else "—",
+        posting_url=posting.url,
+        term_label=(
+            f"{posting.season.value.title()} {posting.term_year}"
+            if posting.season and posting.term_year
+            else None
+        ),
+        location=posting.location_labels[0] if posting.location_labels else None,
+        stage=state.stage.name,
+        stage_label=applications.STAGE_LABELS[state.stage],
+        is_live=state.stage.is_live,
+        is_terminal=state.stage.is_terminal,
+        timeline=[
+            StageEntryOut(
+                event_type=e.event_type,
+                stage=e.stage.name,
+                label=e.label,
+                occurred_at=e.occurred_at,
+                note=e.note,
+            )
+            for e in state.timeline
+        ],
+        notes=state.notes,
+        days_silent=state.days_silent(),
+        silence_note=state.silence_note(),
+    )
+
+
+def _funnel_out(report: funnel.FunnelReport) -> FunnelOut:
+    return FunnelOut(
+        total=report.total,
+        has_enough_data=report.has_enough_data,
+        basis=report.basis(),
+        stages=[
+            StageCountOut(stage=s.stage.name, label=s.label, reached=s.reached, current=s.current)
+            for s in report.stages
+        ],
+        conversions=[
+            ConversionOut(
+                from_label=c.from_label,
+                to_label=c.to_label,
+                reached_from=c.reached_from,
+                reached_to=c.reached_to,
+                has_enough_data=c.has_enough_data,
+                statement=c.statement,
+            )
+            for c in report.conversions
+        ],
+        waits=[
+            WaitTimeOut(
+                from_label=w.from_label,
+                to_label=w.to_label,
+                sample_size=w.sample_size,
+                median_days=w.median_days,
+                statement=w.statement,
+            )
+            for w in report.waits
+        ],
+    )
+
+
+@router.get("/applications", response_model=BoardOut)
+def get_board(session: Session = Depends(get_session)) -> BoardOut:
+    """Every application, folded from its events, plus the funnel over them."""
+    rows = applications.board(session)
+    return BoardOut(
+        applications=[_application_out(state, posting) for state, posting in rows],
+        funnel=_funnel_out(funnel.build([state for state, _ in rows])),
+    )
+
+
+@router.post("/postings/{posting_id}/apply", response_model=ApplicationOut, status_code=201)
+def track_posting(
+    posting_id: UUID,
+    payload: LogEventIn | None = None,
+    session: Session = Depends(get_session),
+) -> ApplicationOut:
+    """Start tracking a posting, optionally logging a stage in the same call.
+
+    Sending ``{"event_type": "applied"}`` is the one-click apply-and-log path
+    from Discover; sending nothing just saves it to the board.
+    """
+    posting = session.get(Posting, posting_id)
+    if posting is None:
+        raise HTTPException(status_code=404, detail="Posting not found")
+
+    application, _ = applications.get_or_create(session, posting_id, mark_saved=payload is None)
+    if payload is not None:
+        try:
+            applications.log_event(
+                session,
+                application,
+                payload.event_type,
+                occurred_at=payload.occurred_at,
+                note=payload.note,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    session.commit()
+    history = event_log.history(session, entity_type=applications.ENTITY, entity_id=application.id)
+    return _application_out(applications.fold(application, history), posting)
+
+
+@router.post("/applications/{application_id}/events", response_model=ApplicationOut)
+def log_application_event(
+    application_id: UUID,
+    payload: LogEventIn,
+    session: Session = Depends(get_session),
+) -> ApplicationOut:
+    """Record a stage change. Nothing is overwritten — this appends a fact."""
+    application = session.get(Application, application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    try:
+        applications.log_event(
+            session,
+            application,
+            payload.event_type,
+            occurred_at=payload.occurred_at,
+            note=payload.note,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    session.commit()
+    posting = session.get(Posting, application.posting_id)
+    history = event_log.history(session, entity_type=applications.ENTITY, entity_id=application.id)
+    return _application_out(applications.fold(application, history), posting)
+
+
+@router.delete("/applications/{application_id}", status_code=204)
+def untrack(application_id: UUID, session: Session = Depends(get_session)) -> None:
+    """Remove an application from the board.
+
+    Deliberately rare and explicit: the board is a record, and the usual way to
+    close something out is to log ``rejected`` or ``withdrawn`` so the funnel
+    keeps the fact that it happened.
+    """
+    application = session.get(Application, application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    session.delete(application)
+    session.commit()

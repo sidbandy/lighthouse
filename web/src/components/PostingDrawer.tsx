@@ -85,9 +85,12 @@ function DrawerBody({ posting, onClose }: { posting: PostingDetail; onClose: () 
         </p>
       )}
 
-      <a href={posting.url} target="_blank" rel="noreferrer" className="btn-primary w-full">
-        Open application ↗
-      </a>
+      <div className="flex gap-2">
+        <a href={posting.url} target="_blank" rel="noreferrer" className="btn-primary flex-1">
+          Open application ↗
+        </a>
+        <TrackActions postingId={posting.id} />
+      </div>
 
       {posting.match ? (
         <section className="card p-4 space-y-3">
@@ -149,6 +152,58 @@ function DrawerBody({ posting, onClose }: { posting: PostingDetail; onClose: () 
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+/**
+ * The Discover → Track hop. Two buttons rather than one, because saving
+ * something to read later and recording that you actually sent it are different
+ * facts, and the second one is dated — it seeds every wait-time figure the
+ * funnel will later report.
+ */
+function TrackActions({ postingId }: { postingId: string }) {
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "applied">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const run = (event?: "applied") => {
+    setState("saving");
+    setError(null);
+    api
+      .trackPosting(postingId, event ? { event_type: event } : undefined)
+      .then(() => setState(event ? "applied" : "saved"))
+      .catch((e) => {
+        setError(String(e.message ?? e));
+        setState("idle");
+      });
+  };
+
+  if (state === "saved" || state === "applied") {
+    return (
+      <span className="btn text-xs text-good border border-good/30 bg-good/5 shrink-0">
+        ✓ {state === "applied" ? "Logged as applied" : "On your board"}
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex gap-1.5 shrink-0" title={error ?? undefined}>
+      <button
+        onClick={() => run()}
+        disabled={state === "saving"}
+        className="btn-toggle text-xs"
+        title="Add to your board without marking it applied"
+      >
+        Save
+      </button>
+      <button
+        onClick={() => run("applied")}
+        disabled={state === "saving"}
+        className="btn-toggle text-xs"
+        title="Record that you applied today"
+      >
+        I applied
+      </button>
     </div>
   );
 }

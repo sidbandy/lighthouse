@@ -7,6 +7,7 @@ import { Header, type View } from "./components/Header";
 import { LaneColumn } from "./components/LaneColumn";
 import { PostingDrawer } from "./components/PostingDrawer";
 import { ResumeCheck } from "./components/ResumeCheck";
+import { TrackBoard } from "./components/TrackBoard";
 
 const EMPTY_FILTERS: Filters = { role: null, season: null, withDescriptionOnly: false };
 
@@ -41,7 +42,7 @@ export default function App() {
     return (
       <div className="min-h-full flex flex-col">
         <Header view={view} onView={setView} />
-        {view === "corpus" ? <CorpusPage /> : <ResumeCheck />}
+        {view === "corpus" ? <CorpusPage /> : view === "track" ? <TrackBoard /> : <ResumeCheck />}
       </div>
     );
   }

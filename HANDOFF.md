@@ -55,7 +55,8 @@ These constrain every feature. Violating them is the fastest way to lose the ope
 
 - **Backend:** Python **3.12 (arm64)** — venv at repo root `.venv`, created from `/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12`. (Note: system default `python3` is 3.14 which lacks some ML wheels — always use `.venv`.) FastAPI, SQLAlchemy 2.0, Pydantic v2, Alembic, httpx, rapidfuzz.
 - **Database:** local **PostgreSQL 16** (Homebrew, `postgresql@16`), database `lighthouse`, connection `postgresql+psycopg://localhost/lighthouse`. **pgvector 0.8.0** was built from source against pg16 (the Homebrew bottle only ships pg17/18 builds). The `Vector(384)` column exists on postings/corpus but is currently unused (see §7 on embeddings).
-- **Frontend:** React 18 + Vite + TypeScript + Tailwind v3. Dark "beacon" theme (cool slate `ink-*`, warm amber `beacon-*` accent, lane accents reach/target/safety). `web/` dir. Playwright is a devDependency for screenshot verification.
+- **Frontend:** React 18 + Vite + TypeScript + Tailwind v3. **Light "lighthouse" theme** — cream `paper` page, white cards, one `navy-*` ramp for structure and type (low = light, conventional order), `beacon-*` orange spent only on the primary action and the live figure. Lane accents reach/target/safety. The navy masthead is the only dark band on the page. `web/` dir; Playwright is a devDependency for screenshot verification. **There is no dark mode and none is planned.**
+  - Two classes of bug have bitten this theme twice: a utility referenced but never defined in `tailwind.config.js` is *silently dropped* rather than erroring (`mist-500`, `font-600` — nothing was bold for weeks), and a sweep that globs only `*.tsx` misses `lib/format.ts`. After any token change, grep for the old names across `*.ts` too, and probe a computed style in the browser rather than trusting the diff.
 - **Hard constraint — the operator's machine is an Apple M3 with 8 GB RAM.** This is why there is **NO torch / sentence-transformers** — a ~2 GB install is off the table. Match scoring is pure-lexical BM25 (see §7). Any future embeddings/voice must be local and light, or deferred.
 - **LLM:** none wired yet. When needed (mock interviews, extraction), use **Gemini free tier** (operator is low on Claude credits), behind a provider interface with a rule-based fallback so everything degrades gracefully offline. Not built.
 - **No Docker in use** — local Postgres is the dev path. A `docker-compose.yml` exists for future deploy-readiness only.
@@ -81,7 +82,7 @@ PYTHONPATH=backend .venv/bin/python -m lighthouse.cli cycles       # applyable c
 PYTHONPATH=backend .venv/bin/python -m lighthouse.cli sources      # per-source health
 
 # --- tests / lint / migrations ---
-.venv/bin/pytest backend/tests -q          # 419 passing
+.venv/bin/pytest backend/tests -q          # 467 passing
 .venv/bin/ruff check backend               # clean
 .venv/bin/ruff format backend
 cd backend && ../.venv/bin/alembic upgrade head
@@ -103,6 +104,7 @@ backend/lighthouse/
 │   ├── models.py     # ALL SQLAlchemy models (see §8)
 │   ├── corpus.py     # the operator's facts/stories: CRUD, zero-fab enforcement
 │   ├── resume.py     # PDF -> draft facts (pdfplumber); raw text for ATS check
+│   ├── events.py     # the append-only log: record / history / history_for_many
 │   ├── onboarding.py # empty -> usable: resume, projects, targets, constraints
 │   ├── schemas.py    # Pydantic shapes for corpus + onboarding
 │   ├── router.py     # /api/corpus/*, /api/onboarding/*, /api/companies/search
@@ -131,6 +133,8 @@ backend/lighthouse/
 │   ├── schemas.py    # Pydantic response shapes
 │   └── router.py     # /api/postings, /api/discover, /api/cycles, /api/sources/*
 └── track/
+    ├── applications.py # apply->funnel state machine, folded from the event log
+    ├── funnel.py     # observed counts + conversions, refuses rates on tiny samples
     ├── ats_check.py  # geometry-based ATS parse safety + parse preview (THE resume feature)
     ├── tailor.py     # per-posting requirement extraction (required/preferred/knockouts)
     ├── schemas.py    # AtsReportOut, TailorReportOut
@@ -154,8 +158,10 @@ web/src/
 │   ├── FactList.tsx           # facts by type, each showing its reach + unique reach
 │   ├── FactEditor.tsx         # create/edit one fact
 │   ├── ResumeImport.tsx       # PDF -> drafts -> operator review -> corpus
-│   └── SetupPanel.tsx         # target companies + constraints
-└── App.tsx                    # view switch (discover | corpus | resume)
+│   ├── SetupPanel.tsx         # target companies + constraints
+│   ├── TrackBoard.tsx         # the application board, grouped by stage
+│   └── FunnelPanel.tsx        # stage counts, conversions, real wait times
+└── App.tsx                    # view switch (discover | track | corpus | resume)
 ```
 
 **Data-flow spine:** everything personal reads/writes the **corpus** (`corpus_facts`, `corpus_stories`) and appends to the **event log** (`events`, append-only, `occurred_at` vs `recorded_at`). Modules never call each other's internals — they go through corpus + events. Shared tables (postings, companies, source_health, reported_questions) have no `user_id`; personal tables have a nullable `user_id` defaulted to a single hardcoded operator UUID — this split is what makes multi-user later a config change, not a rewrite.
@@ -181,7 +187,7 @@ Enums are Python `StrEnum` (Season, Sponsorship, RoleFamily, EmploymentType). `R
 
 ---
 
-## 9. What is BUILT and working (16 commits, 419 tests passing, clean lint)
+## 9. What is BUILT and working (18 commits, 467 tests passing, clean lint)
 
 **Ingestion (Discover phase 1 — the first useful milestone, DONE):**
 - **~95 sources across 3 tiers.** Tier 1: Simplify's structured `listings.json` (internships + new-grad; carries a `terms` array spanning all cycles — this is what makes off-cycle coverage possible). Tier 2: 11 curated markdown repos (vansh, speedyapply, zapplyjobs, jobright, sndsh, NUFT quant). Tier 3: direct ATS JSON APIs (Greenhouse/Ashby/Lever/SmartRecruiters) — ~27 verified seed boards + auto-discovery from posting URLs. **Tier 3 is the only tier with full descriptions**, which match scoring and tailoring need.
@@ -206,6 +212,13 @@ Enums are Python `StrEnum` (Season, Sponsorship, RoleFamily, EmploymentType). `R
 - **ATS parse-safety checker** (`ats_check.py`): geometry-based. Detects multi-column layouts and shows the **parse preview** — the resume re-extracted the way a naive ATS reads it, side by side with the intended layout, so you SEE the scramble. Also: contact-in-header/footer (dropped by ~25% of ATS = auto-reject), ligatures, decorative/non-ATS fonts, risky bullet glyphs, non-standard section headings, image-only PDFs. Ranked worst-first, each with a concrete fix. Grounded in how Workday/Greenhouse/Taleo actually fail. Full UI at the "Résumé check" page.
 - **Per-posting tailoring** (`tailor.py`): reads one JD closely — required vs preferred (weighted differently), hard knockouts (years/degree/authorization/graduation/location), and three honest buckets with specific per-item advice ("you have this but it's not on the resume you pasted — put it in a bullet"). **Strips legal/EEO boilerplate** before extracting (this was the key fix — "reasonable accommodation" was being read as a required skill). Coverage % with the honest edits that would raise it. Now surfaced as a **panel inside the posting drawer** (paste resume text optional) AND as a standalone endpoint.
 
+**Track — the application board (DONE, backend + frontend):**
+- **Event-sourced.** `Application` has no `status` column: state is folded from the append-only `events` log (`core/events.py`) on every read. That buys dates rather than states, additive corrections, and measurable silence — a mutable status field can answer none of the three.
+- **Ghosting as a dated fact.** "31 days since you applied, no response" — a subtraction between two real dates, never a probability. Suppressed at 0 days, because a true-but-useless line on every fresh row trains you to ignore the one that matters at day 40.
+- **The funnel refuses false precision.** Conversions are all measured from *Applied* (a consecutive-pair rate would assume every application walks the same path — real ones skip the OA entirely), shown as "3 of 12 (25%)" with both numbers, and below `MIN_SAMPLE`=10 it says "too few to read anything into yet" instead of a percentage. Wait times are observed medians with n and range; under n=3 it lists the raw observations rather than computing a median from one point.
+- **Two bugs worth remembering, both found by running the logic rather than reading it:** stage counts originally used `>=`, so an application that went straight from applied to interview counted as having "reached assessment" — inflating a stage it never touched. And `total` counted saved-but-never-applied bookmarks, so "across 12 applications" sat above conversions all measured out of 6.
+- One-click save / "I applied" from the posting drawer; the board groups by stage and offers only the transitions that make sense from where a row actually is.
+
 **Generalization (DONE):** role taxonomy + skill vocabulary + classifier all cover finance/consulting/business/marketing/design/mechanical/science, verified on real titles.
 
 ---
@@ -215,7 +228,7 @@ Enums are Python `StrEnum` (Season, Sponsorship, RoleFamily, EmploymentType). `R
 The plan's build sequence is Discover → Track → Company Intel → Study → Practice → Briefing. Discover is done; Track is mostly done (resume features shipped; the application board + funnel below are not).
 
 1. **Stories UI + corpus depth.** `corpus_stories` (STAR + `source_fact_ids`) has a service layer and zero-fab enforcement but no UI and no consumer yet — it unlocks once Study/Practice land. Corpus staleness nudges are also unbuilt (every seeded fact shares one `created_at`, so there is nothing real to show yet).
-2. **Track — application board + funnel (§3).** Event-sourced apply→track pipeline (saved/applied/OA/interview/offer/rejected, `ghosted` as a *dated fact* not a probability), one-click apply-and-log from Discover, resume-version tracking, funnel analytics vs cited published baselines (raw counts + ranges, NO fitted distributions). Models (Application, ResumeVersion, Event) already exist.
+2. **Track — remaining pieces.** The board, the event-sourced funnel and one-click apply-and-log from Discover are DONE. Still missing: **back-dating events from the UI** (the API takes `occurred_at`, the board never sends it — see KNOWN_GAPS, highest-value item), resume-version tracking (`ResumeVersion` model exists, nothing writes it), free-text notes, and comparison against cited published baselines.
 3. **Company Intelligence (§4).** `company_processes` (interview format/rounds/rubrics), expected wait times (real reported gaps, sample size shown), a **cycle-open timing model** from historical posting dates ("Optiver's Summer roles posted early July the last 2 years"), timezone-correct multi-stage deadline calendar with ICS export, specificity hooks. Population is semi-automated (Reddit/LeetCode → extraction → operator review) — needs the Gemini LLM layer.
 4. **Study (§6).** Company-weighted problem intelligence (real reported counts), per-pattern attempt records (transparent, no mastery score), SM-2 spaced repetition tolerant of missed days, deterministic study-plan scheduler, competency-tagged story bank with coverage matrix, TMAY builder. Reuse the recency-weighting helper.
 5. **Practice (§7).** Behavioral first (needs no sandbox): fully-LOCAL voice loop (Web Speech live captions + whisper.cpp transcript + Piper TTS — all local per the RAM constraint), deterministic Layer-1 delivery metrics (filler/WPM/silences — no LLM), Layer-2/3 feedback via Gemini with rule-based fallback and the hard zero-fabrication constraint. Then technical mocks + a sandboxed code runner (Docker, no network, resource caps) as the final isolated phase.
@@ -244,6 +257,11 @@ Do NOT integrate these yet. The operator wants the complete base product first, 
 - **JobSpy (Tier 4 aggregators) and the free remote feeds are planned but not yet wired** — only Tiers 1–3 are live in the registry.
 - **The `underclassmen-internships` repo was intentionally dropped** — its table is a program directory (name/open-date/year), not postings. If re-adding, it belongs in the Companies module.
 - **Bugs are best caught by running against live data**, not by trusting the design — this has held true repeatedly (multi-table attribution, location merging, idempotency, boilerplate pollution, score compression were all found this way). When building, hit the real DB and real feeds.
+- **`docs/KNOWN_GAPS.md` is the parking lot, and keeping it current is part of the job.** When you find a narrow edge case, a suspicious number, or a half-wired capability that is *not* blocking what you are building — **write it there instead of fixing it**. Chasing every small thing mid-feature is how a session ends with three half-finished modules; the operator asked for it to work this way explicitly.
+  - Each entry must state **the problem, why it happens, and how to fix it**, with a severity of `wrong` / `misleading` / `incomplete` / `cosmetic`. An entry that only says "X is weird" costs the next session the same investigation that produced it.
+  - **Delete entries as they are fixed** — git history records what was fixed, that file records what is not, and a stale entry sends someone to look at working code.
+  - The file also has a "Not gaps — deliberate" section. Read it before "fixing" something that looks wrong; several of those choices are load-bearing.
+  - Subagent reports are a good source: test-writing agents are told to report suspicious findings rather than fix them, and those reports have twice surfaced real bugs. Triage them into either an immediate fix (if it produces a wrong number) or an entry in that file.
 - **Push discipline:** commit ~daily, push once at night after a full verification pass (`pytest` clean, `ruff` clean, app runs, key flows work). Remote `sidbandy/lighthouse`.
 
 ---
@@ -274,7 +292,7 @@ Read commit messages for the "why" — they're detailed and explain the reasonin
 ## 14. First moves in a new session
 
 1. Read this doc, then `LIGHTHOUSE_SPEC.md` and the plan file.
-2. `.venv/bin/pytest backend/tests -q` (expect 419 passing) and `.venv/bin/ruff check backend` (clean) to confirm a green baseline.
+2. `.venv/bin/pytest backend/tests -q` (expect 467 passing) and `.venv/bin/ruff check backend` (clean) to confirm a green baseline.
 3. Start the API + frontend (§6), open localhost:5173, click through Discover and Résumé check to see the current state.
 4. Recommended next build: **the Track application board + funnel** (§10 item 2) — Discover and the corpus are done, so the next real gap is what happens *after* you decide to apply. The models (Application, ResumeVersion, Event) already exist and nothing writes to them yet; note there is still no `core/events.py`, so the append-only event log has no helper.
 5. Honor the operating principles (§3) and preferences (§4) in everything.

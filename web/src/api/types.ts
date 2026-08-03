@@ -331,3 +331,97 @@ export interface DiscoverParams {
   with_description_only?: boolean;
   per_lane?: number;
 }
+
+// --- Track: the application board ---
+
+export type Stage =
+  | "SAVED"
+  | "APPLIED"
+  | "ASSESSMENT"
+  | "INTERVIEW"
+  | "FINAL"
+  | "OFFER"
+  | "REJECTED"
+  | "WITHDRAWN"
+  | "ACCEPTED";
+
+/** The event vocabulary the backend accepts. Mirrors EVENT_STAGES. */
+export type ApplicationEvent =
+  | "saved"
+  | "applied"
+  | "assessment_received"
+  | "assessment_completed"
+  | "interview_scheduled"
+  | "interview_completed"
+  | "final_round"
+  | "offer"
+  | "rejected"
+  | "withdrawn"
+  | "accepted"
+  | "note";
+
+export interface StageEntry {
+  event_type: string;
+  stage: Stage;
+  label: string;
+  occurred_at: string;
+  note: string;
+}
+
+export interface Application {
+  id: string;
+  posting_id: string;
+  posting_title: string;
+  company_name: string;
+  posting_url: string;
+  term_label: string | null;
+  location: string | null;
+  stage: Stage;
+  stage_label: string;
+  is_live: boolean;
+  is_terminal: boolean;
+  timeline: StageEntry[];
+  notes: string | null;
+  /** Days since the last employer signal. A real subtraction, not a ghosting probability. */
+  days_silent: number | null;
+  silence_note: string | null;
+}
+
+export interface StageCount {
+  stage: Stage;
+  label: string;
+  reached: number;
+  current: number;
+}
+
+export interface Conversion {
+  from_label: string;
+  to_label: string;
+  reached_from: number;
+  reached_to: number;
+  has_enough_data: boolean;
+  /** Pre-rendered with both numbers always shown. Render as-is. */
+  statement: string;
+}
+
+export interface WaitTime {
+  from_label: string;
+  to_label: string;
+  sample_size: number;
+  median_days: number | null;
+  statement: string;
+}
+
+export interface Funnel {
+  total: number;
+  has_enough_data: boolean;
+  basis: string;
+  stages: StageCount[];
+  conversions: Conversion[];
+  waits: WaitTime[];
+}
+
+export interface Board {
+  applications: Application[];
+  funnel: Funnel;
+}

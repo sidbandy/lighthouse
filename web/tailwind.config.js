@@ -57,6 +57,18 @@ export default {
       fontSize: {
         "2xs": ["0.6875rem", { lineHeight: "1rem" }],
       },
+      // Numeric weights, matching the Inter weights actually loaded in
+      // index.css and the numeric convention the rest of these tokens use.
+      // They were referenced throughout the components before being defined
+      // here, and an undefined utility is silently dropped rather than
+      // erroring — so nothing on the page was ever actually bold.
+      fontWeight: {
+        400: "400",
+        450: "450",
+        500: "500",
+        600: "600",
+        700: "700",
+      },
       borderRadius: {
         xl: "0.875rem",
       },

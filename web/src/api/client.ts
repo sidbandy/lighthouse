@@ -3,7 +3,10 @@
 // fast enough that keeping this simple is the right call.
 
 import type {
+  Application,
+  ApplicationEvent,
   AtsReport,
+  Board,
   CompanySuggestion,
   Constraints,
   Corpus,
@@ -123,6 +126,17 @@ export const api = {
   saveTargets: (names: string[]) => send<Onboarding>("PUT", "/api/onboarding/targets", names),
   searchCompanies: (q: string, limit = 20) =>
     get<CompanySuggestion[]>("/api/companies/search", { q, limit }),
+
+  // --- Track: the application board ---
+  board: () => get<Board>("/api/applications"),
+  /** Save a posting to the board, optionally logging a stage in the same call. */
+  trackPosting: (postingId: string, event?: { event_type: ApplicationEvent; occurred_at?: string; note?: string }) =>
+    send<Application>("POST", `/api/postings/${postingId}/apply`, event ?? null),
+  logEvent: (
+    applicationId: string,
+    event: { event_type: ApplicationEvent; occurred_at?: string; note?: string },
+  ) => send<Application>("POST", `/api/applications/${applicationId}/events`, event),
+  untrack: (applicationId: string) => send<void>("DELETE", `/api/applications/${applicationId}`),
 };
 
 export { ApiError };
