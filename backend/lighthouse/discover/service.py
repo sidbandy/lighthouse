@@ -19,9 +19,11 @@ from ..core.models import Company, Posting, PostingSource, Season, SourceHealth
 from ..ingest.seasons import Cycle, applyable_cycles
 from .ghost import assess
 from .schemas import (
+    BriefFactOut,
     CycleCount,
     GhostAssessmentOut,
     GhostSignalOut,
+    PostingBriefOut,
     PostingDetail,
     PostingSummary,
     SourceSighting,
@@ -175,6 +177,27 @@ def _to_summary(posting: Posting, today: date) -> PostingSummary:
     )
 
 
+def _brief_out(description: str | None) -> PostingBriefOut | None:
+    """Structure the description, or ``None`` when there is nothing to read."""
+    from . import brief as brief_service
+
+    if not description:
+        return None
+    report = brief_service.build(description)
+    return PostingBriefOut(
+        logistics=[
+            BriefFactOut(kind=f.kind, label=f.label, value=f.value, evidence=f.evidence)
+            for f in report.logistics
+        ],
+        process=[
+            BriefFactOut(kind=f.kind, label=f.label, value=f.value, evidence=f.evidence)
+            for f in report.process
+        ],
+        responsibilities=report.responsibilities,
+        is_thin=report.is_thin,
+    )
+
+
 def get_posting(session: Session, posting_id, today: date | None = None) -> PostingDetail | None:
     today = today or datetime.now(UTC).date()
     posting = session.scalar(
@@ -193,6 +216,7 @@ def get_posting(session: Session, posting_id, today: date | None = None) -> Post
 
     return PostingDetail(
         **summary.model_dump(),
+        brief=_brief_out(posting.description),
         match=match_for_posting(session, posting),
         ghost=GhostAssessmentOut(
             label=assessment.label.value,

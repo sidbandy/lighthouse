@@ -49,7 +49,7 @@ export default function App() {
 
   return (
     <div className="min-h-full flex flex-col">
-      <Header view={view} onView={setView} />
+      <Header view={view} onView={setView} onRefreshed={load} />
 
       <div className="px-6 py-4 border-b border-navy-200/60">
         <FilterBar filters={filters} onChange={setFilters} />

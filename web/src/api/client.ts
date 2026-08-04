@@ -19,6 +19,7 @@ import type {
   LaneBucket,
   Onboarding,
   PostingDetail,
+  RefreshStatus,
   RoleFamily,
   SourceHealth,
   TailorReport,
@@ -137,6 +138,10 @@ export const api = {
     event: { event_type: ApplicationEvent; occurred_at?: string; note?: string },
   ) => send<Application>("POST", `/api/applications/${applicationId}/events`, event),
   untrack: (applicationId: string) => send<void>("DELETE", `/api/applications/${applicationId}`),
+
+  // --- Ingest ---
+  startRefresh: () => send<RefreshStatus>("POST", "/api/ingest/refresh?max_tier=3"),
+  refreshStatus: () => get<RefreshStatus>("/api/ingest/refresh"),
 };
 
 export { ApiError };

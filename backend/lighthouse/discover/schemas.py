@@ -137,8 +137,43 @@ class LaneBucketOut(BaseModel):
     postings: list[ScoredPostingOut]
 
 
+class BriefFactOut(BaseModel):
+    """One fact lifted out of the description, with the sentence it came from.
+
+    ``evidence`` always travels with ``value``: a regex over free prose is wrong
+    often enough that a figure the operator cannot check is worse than none.
+    """
+
+    kind: str
+    label: str
+    value: str
+    evidence: str
+
+
+class PostingBriefOut(BaseModel):
+    """The decision-relevant contents of a description, pulled to the top.
+
+    Every field is extracted, never inferred. A posting that does not state its
+    pay has no ``compensation`` — it is not estimated from the title or the
+    market.
+    """
+
+    logistics: list[BriefFactOut] = Field(
+        default_factory=list, description="Pay, working pattern, length, deadline, GPA."
+    )
+    process: list[BriefFactOut] = Field(
+        default_factory=list, description="Interview stages the posting names outright."
+    )
+    responsibilities: list[str] = Field(default_factory=list)
+    is_thin: bool = Field(
+        default=False,
+        description="The description named nothing concrete. That absence is itself a signal.",
+    )
+
+
 class PostingDetail(PostingSummary):
     description: str | None = None
+    brief: PostingBriefOut | None = None
     match: MatchOut | None = None
     ghost: GhostAssessmentOut | None = None
     ats_vendor: str | None = None

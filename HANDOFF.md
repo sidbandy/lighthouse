@@ -121,9 +121,11 @@ backend/lighthouse/
 │   ├── ats_targets.py# Tier 3 board seeds + auto-discovery from posting URLs
 │   ├── pipeline.py   # run_ingest(): fetch (isolated per source) -> dedup -> persist
 │   ├── health.py     # (source_health tracking lives in models + pipeline)
+│   ├── runner.py     # background ingest + pollable status, for the refresh button
 │   ├── router.py     # /api/ingest/*
 │   └── connectors/   # simplify.py, markdown_repo.py, ats.py (greenhouse/ashby/lever/SR)
 ├── discover/
+│   ├── brief.py      # pay/pattern/length/deadline/GPA/process pulled from the JD
 │   ├── coverage.py   # corpus x market: per-fact reach/unique-reach, corpus-wide gaps
 │   ├── match.py      # BM25 CorpusIndex + 3-bucket keyword output (evidenced/reword/gap)
 │   ├── ghost.py      # ghost-job signal checklist (facts, NO probability)
@@ -147,7 +149,9 @@ web/src/
 │   ├── FilterBar.tsx          # role families (ALL majors), seasons, description-only toggle
 │   ├── LaneColumn.tsx, PostingCard.tsx   # the three-lane Discover view
 │   ├── MatchMeter.tsx, TermChips.tsx     # score (muted when thin) + 3-bucket keywords
-│   ├── PostingDrawer.tsx      # posting detail: match, TailorPanel, ghost, sources, description
+│   ├── PostingDrawer.tsx      # the centred posting window: brief, match, tailor, ghost, sources
+│   ├── PostingBriefPanel.tsx  # the extracted facts, each with its source sentence
+│   ├── RefreshButton.tsx      # kicks off a background ingest and polls it
 │   ├── TailorPanel.tsx        # per-posting tailoring inside the drawer
 │   ├── GhostChecklist.tsx     # ghost signals
 │   ├── ResumeCheck.tsx        # the resume-check page (upload)
@@ -260,6 +264,7 @@ Do NOT integrate these yet. The operator wants the complete base product first, 
 - **`docs/KNOWN_GAPS.md` is the parking lot, and keeping it current is part of the job.** When you find a narrow edge case, a suspicious number, or a half-wired capability that is *not* blocking what you are building — **write it there instead of fixing it**. Chasing every small thing mid-feature is how a session ends with three half-finished modules; the operator asked for it to work this way explicitly.
   - Each entry must state **the problem, why it happens, and how to fix it**, with a severity of `wrong` / `misleading` / `incomplete` / `cosmetic`. An entry that only says "X is weird" costs the next session the same investigation that produced it.
   - **Delete entries as they are fixed** — git history records what was fixed, that file records what is not, and a stale entry sends someone to look at working code.
+  - **`docs/FRONTEND_NOTES.md`** is the same idea for design and UX work. The operator wants functionality first and frontend polish second — put frontend ideas there rather than building them mid-feature. It also has a "settled" section recording theme decisions that should not be relitigated.
   - The file also has a "Not gaps — deliberate" section. Read it before "fixing" something that looks wrong; several of those choices are load-bearing.
   - Subagent reports are a good source: test-writing agents are told to report suspicious findings rather than fix them, and those reports have twice surfaced real bugs. Triage them into either an immediate fix (if it produces a wrong number) or an entry in that file.
 - **Push discipline:** commit ~daily, push once at night after a full verification pass (`pytest` clean, `ruff` clean, app runs, key flows work). Remote `sidbandy/lighthouse`.

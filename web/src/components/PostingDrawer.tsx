@@ -4,11 +4,18 @@ import type { PostingDetail } from "../api/types";
 import { relativeAge, sourceLabel, sponsorshipLabel, termRuleLabel } from "../lib/format";
 import { GhostChecklist } from "./GhostChecklist";
 import { MatchMeter } from "./MatchMeter";
+import { PostingBriefPanel } from "./PostingBriefPanel";
 import { TailorPanel } from "./TailorPanel";
 import { TermChips } from "./TermChips";
 
-// The full posting: everything the operator needs to decide whether to spend an
-// hour on a tailored application. Slides in over the lanes.
+// The full posting: everything needed to decide whether to spend an hour on a
+// tailored application, in one centred window.
+//
+// It opens over the lanes rather than beside them because this is a reading
+// surface, not a sidebar — the whole point is to replace opening the job site
+// in another tab and scrolling two thousand words for the six facts that
+// matter. Those six lead; the original description stays available underneath
+// for when the parser missed something.
 
 export function PostingDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
   const [posting, setPosting] = useState<PostingDetail | null>(null);
@@ -36,9 +43,12 @@ export function PostingDrawer({ id, onClose }: { id: string | null; onClose: () 
   if (!id) return null;
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-      <div className="relative w-full max-w-xl bg-white border-l border-navy-200 shadow-lift overflow-y-auto animate-fade-in">
+    <div className="fixed inset-0 z-40 flex items-start justify-center p-4 sm:p-8 overflow-y-auto">
+      <div
+        className="fixed inset-0 bg-navy-900/40 backdrop-blur-sm animate-fade-in"
+        onClick={onClose}
+      />
+      <div className="relative w-full max-w-3xl bg-white rounded-xl border border-navy-200 shadow-lift animate-fade-in my-auto">
         {loading && <div className="p-8 text-sm text-navy-500">Loading…</div>}
         {error && <div className="p-8 text-sm text-bad">Could not load posting. {error}</div>}
         {posting && <DrawerBody posting={posting} onClose={onClose} />}
@@ -91,6 +101,15 @@ function DrawerBody({ posting, onClose }: { posting: PostingDetail; onClose: () 
         </a>
         <TrackActions postingId={posting.id} />
       </div>
+
+      {posting.brief && (
+        <section className="card p-4 space-y-4 bg-paper border-navy-200">
+          <h3 className="text-2xs font-600 uppercase tracking-wider text-navy-600">
+            The posting, in facts
+          </h3>
+          <PostingBriefPanel brief={posting.brief} />
+        </section>
+      )}
 
       {posting.match ? (
         <section className="card p-4 space-y-3">

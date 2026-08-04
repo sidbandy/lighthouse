@@ -207,6 +207,31 @@ anyway — do both together.
 
 ---
 
+## Discover: the posting brief
+
+### Extraction coverage is uneven by field — `incomplete`
+
+Measured over 400 real descriptions: compensation 30%, length 20%, working
+pattern 19%, interview process 10%, deadline 6%, GPA 4%, responsibilities 77%.
+The low numbers are mostly postings that genuinely say nothing (`is_thin` exists
+to surface exactly that), but deadline and GPA are also the weakest patterns.
+
+**Fix:** widen `_DEADLINE_RE` to catch bare dates near "apply" and month-name
+formats; `_GPA_RE` misses "3.0 or above" and "minimum cumulative average". Both
+are contained regex work with a 400-posting corpus already available to measure
+against — re-run the counting script in the commit for this feature.
+
+### Annualised intern salaries read as absurd — `misleading`
+
+Quant firms quote interns an annualised base ("Base Salary: $250,000") which the
+brief reports verbatim as "$250,000 per year" for a ten-week internship. The
+extraction is correct and the evidence tooltip shows the source sentence, but
+the number is easy to misread.
+
+**Fix:** when a duration is also extracted and the pay is annual, show the
+prorated figure alongside — "$250,000/yr · ~$48k over 10 weeks". Do not replace
+the stated figure; add to it.
+
 ## Data hygiene
 
 ### The seeded corpus is still fake — `wrong`

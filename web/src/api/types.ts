@@ -104,8 +104,26 @@ export interface SourceSighting {
   seen_at: string;
 }
 
+/** One fact lifted from the description, with the sentence it came from. */
+export interface BriefFact {
+  kind: string;
+  label: string;
+  value: string;
+  evidence: string;
+}
+
+export interface PostingBrief {
+  /** Pay, working pattern, length, deadline, GPA — whichever the posting states. */
+  logistics: BriefFact[];
+  process: BriefFact[];
+  responsibilities: string[];
+  /** The description named nothing concrete. That absence is itself a signal. */
+  is_thin: boolean;
+}
+
 export interface PostingDetail extends PostingSummary {
   description: string | null;
+  brief: PostingBrief | null;
   match: Match | null;
   ghost: GhostAssessment | null;
   ats_vendor: string | null;
@@ -424,4 +442,19 @@ export interface Funnel {
 export interface Board {
   applications: Application[];
   funnel: Funnel;
+}
+
+/** Background ingest state, polled by the refresh control. */
+export interface RefreshStatus {
+  is_running: boolean;
+  started_at: string | null;
+  finished_at: string | null;
+  summary: string | null;
+  error: string | null;
+  created: number;
+  updated: number;
+  sources_ok: number;
+  sources_failed: number;
+  /** False when a refresh was asked for while one was already running. */
+  accepted: boolean;
 }

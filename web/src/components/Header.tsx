@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { CycleCount, SourceHealth } from "../api/types";
+import { RefreshButton } from "./RefreshButton";
 
 // The masthead: the mark, the live cycle counts (which answer "is there
 // anything worth applying to right now?"), and a quiet source-health indicator.
@@ -20,7 +21,15 @@ function Beacon() {
 
 export type View = "discover" | "track" | "corpus" | "resume";
 
-export function Header({ view, onView }: { view: View; onView: (v: View) => void }) {
+export function Header({
+  view,
+  onView,
+  onRefreshed,
+}: {
+  view: View;
+  onView: (v: View) => void;
+  onRefreshed?: () => void;
+}) {
   const [cycles, setCycles] = useState<CycleCount[]>([]);
   const [health, setHealth] = useState<SourceHealth[]>([]);
 
@@ -75,6 +84,8 @@ export function Header({ view, onView }: { view: View; onView: (v: View) => void
             </div>
           ))}
         </div>
+
+        {view === "discover" && <RefreshButton onFinished={onRefreshed ?? (() => {})} />}
 
         <div
           className="flex items-center gap-1.5 text-2xs text-navy-300 shrink-0"
