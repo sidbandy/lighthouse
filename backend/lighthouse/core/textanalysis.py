@@ -293,9 +293,51 @@ _NO_STEM: frozenset[str] = frozenset(
 )  # fmt: skip
 
 
+# Names for the same skill. Without this a project saying "Postgres" and a skill
+# fact saying "PostgreSQL" evidence *different* terms, so neither gets full
+# credit and the tool can report a gap the operator does not actually have --
+# which breaks the zero-fabrication rule from the other direction, since a false
+# gap is as dishonest as a false strength. Curated and small on purpose: only
+# pairs that are unambiguously the same thing.
+SYNONYMS: dict[str, str] = {
+    "postgresql": "postgres",
+    "psql": "postgres",
+    "golang": "go",
+    "node.js": "nodejs",
+    "node": "nodejs",
+    "k8s": "kubernetes",
+    "js": "javascript",
+    "ts": "typescript",
+    "py": "python",
+    "postgres_sql": "postgres",
+    "tf": "terraform",
+    "gcp": "gcp",
+    "amazon web services": "aws",
+    "machine-learning": "machine learning",
+    "c-plus-plus": "c++",
+    "cpp": "c++",
+    "objective c": "objective-c",
+    "rest api": "rest",
+    "restful": "rest",
+    "ci-cd": "ci/cd",
+    "cicd": "ci/cd",
+    "scikit-learn": "sklearn",
+    "scikit": "sklearn",
+    "tensor flow": "tensorflow",
+    "torch": "pytorch",
+    "excel spreadsheet": "excel",
+    "power bi": "powerbi",
+    "power-bi": "powerbi",
+    "look-er": "looker",
+}
+
+
 def stem(word: str) -> str:
-    """Collapse simple inflections. Conservative by design."""
+    """Collapse simple inflections and known synonyms. Conservative by design."""
     lowered = word.lower()
+    canonical = SYNONYMS.get(lowered)
+    if canonical is not None:
+        return canonical
     if lowered in _NO_STEM or lowered in TECH_TERMS or len(lowered) <= 3:
         return lowered
     for suffix, replacement in _SUFFIXES:

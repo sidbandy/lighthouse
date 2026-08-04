@@ -5,6 +5,7 @@ import { relativeAge, sourceLabel, sponsorshipLabel, termRuleLabel } from "../li
 import { GhostChecklist } from "./GhostChecklist";
 import { MatchMeter } from "./MatchMeter";
 import { PostingBriefPanel } from "./PostingBriefPanel";
+import { atMidday, today } from "./TrackBoard";
 import { TailorPanel } from "./TailorPanel";
 import { TermChips } from "./TermChips";
 
@@ -184,12 +185,15 @@ function DrawerBody({ posting, onClose }: { posting: PostingDetail; onClose: () 
 function TrackActions({ postingId }: { postingId: string }) {
   const [state, setState] = useState<"idle" | "saving" | "saved" | "applied">("idle");
   const [error, setError] = useState<string | null>(null);
+  // Applications get logged days after they were sent as often as not, and the
+  // date is what every wait-time figure on the board is computed from.
+  const [on, setOn] = useState(today());
 
   const run = (event?: "applied") => {
     setState("saving");
     setError(null);
     api
-      .trackPosting(postingId, event ? { event_type: event } : undefined)
+      .trackPosting(postingId, event ? { event_type: event, occurred_at: atMidday(on) } : undefined)
       .then(() => setState(event ? "applied" : "saved"))
       .catch((e) => {
         setError(String(e.message ?? e));
@@ -206,7 +210,7 @@ function TrackActions({ postingId }: { postingId: string }) {
   }
 
   return (
-    <div className="flex gap-1.5 shrink-0" title={error ?? undefined}>
+    <div className="flex items-center gap-1.5 shrink-0" title={error ?? undefined}>
       <button
         onClick={() => run()}
         disabled={state === "saving"}
@@ -219,10 +223,19 @@ function TrackActions({ postingId }: { postingId: string }) {
         onClick={() => run("applied")}
         disabled={state === "saving"}
         className="btn-toggle text-xs"
-        title="Record that you applied today"
+        title="Record that you applied, on the date shown"
       >
         I applied
       </button>
+      <input
+        type="date"
+        value={on}
+        max={today()}
+        onChange={(e) => setOn(e.target.value || today())}
+        title="The date you applied. Change it when logging something you sent earlier."
+        className="text-2xs bg-white border border-navy-200 rounded px-1.5 py-1 text-navy-700
+                   hover:border-navy-300 focus:border-beacon-500 outline-none"
+      />
     </div>
   );
 }

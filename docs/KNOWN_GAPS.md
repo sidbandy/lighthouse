@@ -16,8 +16,17 @@ from scratch later.
 - **Delete entries when they are fixed.** Git history is the record of what was
   fixed; this file is the record of what is *not*. A stale entry is worse than
   no entry, because it sends someone to look at working code.
-- **Severity** is about consequence, not effort:
+- **Anything that breaks a feature gets fixed, not parked.** This file is for
+  things that do not affect the app working — narrow edge cases, and
+  nice-to-haves. If a defect makes a shipped feature record wrong data, produce
+  a wrong number, or mislead a decision, it is not a gap; stop and fix it. Two
+  entries were wrongly filed here and had to be pulled back out (the board
+  stamping every stage as "now", and synonym pairs splitting one skill into
+  two) — that is the mistake this rule exists to prevent.
+- **Severity** is about consequence, not effort. Only the bottom three belong
+  in this file:
   - `wrong` — produces an incorrect number or claim the operator might act on.
+    **Does not belong here. Fix it.**
   - `misleading` — technically true, reads as something else.
   - `incomplete` — a real capability is missing or half-wired.
   - `cosmetic` — looks or reads badly, changes no decision.
@@ -67,25 +76,6 @@ redesign. It belongs with Company Intelligence, which will have the data.
 ---
 
 ## Vocabulary and text analysis
-
-### Synonym pairs are counted as different skills — `wrong`
-
-`TECH_TERMS` holds `postgres` and `postgresql` as separate entries, so a project
-saying "Postgres" and a skill fact saying "PostgreSQL" evidence *different*
-terms and neither gets full credit. Verified live: the Ledger project shows
-`postgres 3` while the PostgreSQL skill fact shows `postgresql 1`.
-
-The same family: `go`/`golang`, `nodejs`/`node.js`, `k8s`/`kubernetes`,
-`js`/`javascript`, `ts`/`typescript`, `ml`/`machine learning`.
-
-This understates match scores and can report a gap the operator does not
-actually have — a direct hit on the zero-fabrication principle, since a false
-gap is as dishonest as a false strength.
-
-**Fix:** an alias map in `core/textanalysis.py` collapsing known synonyms to one
-canonical stem, applied inside `stem()` after the existing `_NO_STEM` check. Keep
-it curated and small. Note the deferred Lightcast Skills API (HANDOFF §11) would
-supply this for free and is the better long-term answer.
 
 ### Terms always render lowercase — `cosmetic`
 
@@ -170,18 +160,6 @@ free-text notes have no UI.
 wired to the résumé check flow first — logging *which* résumé got which outcome
 is most of the value of the funnel, so this is roadmap, not polish.
 
-### Events cannot be back-dated from the UI — `incomplete`
-
-The API takes `occurred_at` on every event and the board never sends it, so
-everything logged through the UI is stamped "now". Back-filling a real search —
-the first thing anyone will do — produces a timeline where twelve applications
-all happened today, and every wait-time figure derived from it is wrong.
-
-**Fix:** a date input on the stage buttons, defaulting to today. The backend
-already handles it correctly; this is frontend only. **This is the highest-value
-item in this file** — the funnel's honesty depends on real dates, and right now
-the UI cannot supply them.
-
 ### The drawer does not know a posting is already tracked — `misleading`
 
 `TrackActions` always renders "Save" and "I applied" regardless of whether the
@@ -234,7 +212,7 @@ the stated figure; add to it.
 
 ## Data hygiene
 
-### The seeded corpus is still fake — `wrong`
+### The seeded corpus is still fake — `incomplete` (data, not code)
 
 `corpus_facts` holds 12 facts from a *test* résumé (Cloudify / Ledger / UT CS
 2028) used during development, not the operator's real history. Every match

@@ -11,6 +11,20 @@ import { FunnelPanel } from "./FunnelPanel";
 // you're actually doing is recording something that already happened on a date.
 // So the interaction is "log what happened", and the grouping follows.
 
+/** Today as yyyy-mm-dd in the *operator's* timezone, which is the one they mean
+ *  when they say "I applied yesterday". `toISOString()` would be UTC and can be
+ *  a day off either side of midnight. */
+export function today(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+}
+
+/** A yyyy-mm-dd from a date input, sent as an instant the backend can store.
+ *  Midday local avoids the date shifting when it is converted to UTC. */
+export function atMidday(day: string): string {
+  return new Date(`${day}T12:00:00`).toISOString();
+}
+
 const COLUMNS: { stage: Stage; title: string; blurb: string; rule: string }[] = [
   {
     stage: "SAVED",
@@ -96,10 +110,10 @@ export function TrackBoard() {
     load().finally(() => setLoading(false));
   }, [load]);
 
-  const log = async (id: string, event: ApplicationEvent) => {
+  const log = async (id: string, event: ApplicationEvent, on: string) => {
     setBusyId(id);
     try {
-      await api.logEvent(id, { event_type: event });
+      await api.logEvent(id, { event_type: event, occurred_at: atMidday(on) });
       await load();
     } catch (e) {
       setError(String((e as Error).message ?? e));
@@ -221,10 +235,15 @@ function ApplicationCard({
 }: {
   application: Application;
   busy: boolean;
-  onLog: (id: string, event: ApplicationEvent) => void;
+  onLog: (id: string, event: ApplicationEvent, on: string) => void;
   onUntrack: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Stage buttons log against this date, not against "now". Back-filling a
+  // search that already happened is the normal first use of this board, and
+  // stamping it all with today would make every wait-time figure downstream
+  // wrong -- which is most of what the funnel is for.
+  const [on, setOn] = useState(today());
   const next = NEXT_EVENTS[application.stage];
 
   return (
@@ -285,11 +304,25 @@ function ApplicationCard({
       )}
 
       {next.length > 0 && (
-        <div className="mt-2.5 pt-2 border-t border-navy-100 flex flex-wrap gap-1">
+        <div className="mt-2.5 pt-2 border-t border-navy-100 space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <label className="text-2xs text-navy-400 shrink-0">on</label>
+            <input
+              type="date"
+              value={on}
+              max={today()}
+              onChange={(e) => setOn(e.target.value || today())}
+              title="When this actually happened. Defaults to today; change it when logging something from last week."
+              className="text-2xs bg-white border border-navy-200 rounded px-1.5 py-0.5
+                         text-navy-700 hover:border-navy-300 focus:border-beacon-500 outline-none"
+            />
+            {on !== today() && <span className="text-2xs text-beacon-700">back-dated</span>}
+          </div>
+          <div className="flex flex-wrap gap-1">
           {next.map((n) => (
             <button
               key={n.event}
-              onClick={() => onLog(application.id, n.event)}
+              onClick={() => onLog(application.id, n.event, on)}
               disabled={busy}
               className={`text-2xs px-1.5 py-0.5 rounded transition-colors disabled:opacity-40 ${
                 n.event === "rejected" || n.event === "withdrawn"
@@ -300,6 +333,7 @@ function ApplicationCard({
               {n.label}
             </button>
           ))}
+          </div>
         </div>
       )}
     </div>
