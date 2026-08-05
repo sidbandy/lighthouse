@@ -320,6 +320,32 @@ class OperatorProfile(Base):
     weekly_study_hours: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     target_cycles: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
 
+    # --- Who the operator is academically -------------------------------
+    # Lighthouse is for students and new grads, so the profile is described in
+    # the terms a student has: a major, a graduation term, and a count of
+    # internships. Deliberately NOT "years of experience" -- a sophomore has
+    # none, and asking makes the tool feel written for somebody else.
+    school: Mapped[str | None] = mapped_column(Text)
+    # Free text, because "Mechanical Engineering & Economics" is a real answer
+    # and an enum of majors would be wrong within a week.
+    major: Mapped[str | None] = mapped_column(Text)
+    degree_level: Mapped[str | None] = mapped_column(String(20))
+
+    # The single most useful eligibility fact there is. Most internships state a
+    # graduation window, and applying outside it is the commonest wasted
+    # application a student makes -- so this is stored as season + year and
+    # checked against what the posting says.
+    graduation_season: Mapped[Season | None] = mapped_column(
+        Enum(Season, name="season"), nullable=True
+    )
+    graduation_year: Mapped[int | None] = mapped_column(Integer)
+
+    # Counts, not years.
+    internships_completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Role families this operator is actually looking for, seeded from their
+    # major and then editable. Drives the default Discover filter.
+    target_role_families: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

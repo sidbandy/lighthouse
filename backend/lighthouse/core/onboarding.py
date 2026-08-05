@@ -157,6 +157,13 @@ def _operator_id() -> uuid.UUID:
     return get_settings().operator_id
 
 
+def load_profile(session: Session, *, user_id: uuid.UUID | None = None) -> OperatorProfile | None:
+    """The operator's profile row, or ``None`` if they have not started one."""
+    return session.scalar(
+        select(OperatorProfile).where(OperatorProfile.user_id == (user_id or _operator_id()))
+    )
+
+
 def load_constraints(
     session: Session, *, user_id: uuid.UUID | None = None
 ) -> OperatorConstraints | None:

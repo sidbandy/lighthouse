@@ -21,6 +21,7 @@ from .ghost import assess
 from .schemas import (
     BriefFactOut,
     CycleCount,
+    EligibilityOut,
     GhostAssessmentOut,
     GhostSignalOut,
     PostingBriefOut,
@@ -198,6 +199,30 @@ def _brief_out(description: str | None) -> PostingBriefOut | None:
     )
 
 
+def _eligibility_out(session: Session, posting: Posting) -> EligibilityOut:
+    """Check the posting's graduation window against the operator's profile.
+
+    The single most valuable check for a student: applying outside a stated
+    class-year window is the commonest wasted application there is.
+    """
+    from ..core.onboarding import load_profile
+    from . import eligibility as eligibility_service
+
+    profile = load_profile(session)
+    check = eligibility_service.check_graduation(
+        posting.description,
+        graduation_year=profile.graduation_year if profile else None,
+        employment_type=posting.employment_type,
+    )
+    return EligibilityOut(
+        verdict=check.verdict.value,
+        headline=check.headline,
+        detail=check.detail,
+        evidence=check.evidence,
+        is_blocking=check.is_blocking,
+    )
+
+
 def get_posting(session: Session, posting_id, today: date | None = None) -> PostingDetail | None:
     today = today or datetime.now(UTC).date()
     posting = session.scalar(
@@ -217,6 +242,7 @@ def get_posting(session: Session, posting_id, today: date | None = None) -> Post
     return PostingDetail(
         **summary.model_dump(),
         brief=_brief_out(posting.description),
+        eligibility=_eligibility_out(session, posting),
         match=match_for_posting(session, posting),
         ghost=GhostAssessmentOut(
             label=assessment.label.value,

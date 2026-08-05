@@ -171,9 +171,24 @@ class PostingBriefOut(BaseModel):
     )
 
 
+class EligibilityOut(BaseModel):
+    """Whether the operator's graduation term clears this posting's window.
+
+    ``not_stated`` is the honest and most common answer: most postings say
+    nothing, and that must never be reported as a pass or a fail.
+    """
+
+    verdict: str = Field(description="eligible | not_eligible | not_stated")
+    headline: str
+    detail: str
+    evidence: str | None = None
+    is_blocking: bool = False
+
+
 class PostingDetail(PostingSummary):
     description: str | None = None
     brief: PostingBriefOut | None = None
+    eligibility: EligibilityOut | None = None
     match: MatchOut | None = None
     ghost: GhostAssessmentOut | None = None
     ats_vendor: str | None = None
