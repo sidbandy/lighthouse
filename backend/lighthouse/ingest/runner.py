@@ -1,16 +1,8 @@
-"""Running an ingest in the background, with a status the UI can poll.
+"""Runs an ingest in a worker thread with a status the UI can poll.
 
-The synchronous endpoint is right for the CLI and for tests, but a refresh
-button cannot hold an HTTP connection open while ~95 sources are fetched. This
-wraps a run in a worker thread and exposes the one piece of state the UI needs:
-is it running, and what happened last time.
-
-Deliberately in-memory and single-slot. A second refresh while one is in flight
-is refused rather than queued — two concurrent runs would race on the same
-dedup keys for no benefit, and the operator pressing a button twice means
-"refresh", not "refresh twice". State is lost on restart, which is correct:
-"currently running" cannot survive the process that was running it, and the
-durable record of what happened lives in ``source_health`` either way.
+Single-slot and in-memory: a second request while one is in flight is refused
+rather than queued, since concurrent runs race on the same dedup keys. The
+durable record of what happened lives in ``source_health``.
 """
 
 from __future__ import annotations

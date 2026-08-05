@@ -1,24 +1,8 @@
-"""Applications: the funnel, derived by folding the event log.
+"""Application state, derived by folding the event log.
 
-An :class:`~lighthouse.core.models.Application` has no ``status`` column on
-purpose. Its state is computed from its events every time it is read, which
-costs a fold over a handful of rows and buys three things a status column
-cannot:
-
-* **Dates, not just states.** "Interview" is much less useful than "OA arrived
-  the 4th, interview the 19th" — and every wait-time figure in Company
-  Intelligence later comes from exactly those gaps.
-* **Corrections are additive.** Logging the wrong stage is fixed by recording
-  the truth, not by overwriting history and losing the fact that you thought
-  otherwise on Tuesday.
-* **Silence is measurable.** Ghosting is not a state anyone transitions into;
-  it is elapsed time since the last real event. That only works if the last
-  real event has a date.
-
-On ghosting specifically, and this is the rule the whole module is built
-around: Lighthouse reports **"31 days since you applied, no response"** and
-never "72% likely ghosted". The elapsed time is a fact the operator can check.
-A probability would be a number invented from a sample of one.
+``Application`` has no status column: the stage is computed from its events on
+every read. That keeps the dates every wait-time figure depends on, makes a
+correction additive, and lets silence be measured rather than guessed at.
 """
 
 from __future__ import annotations
@@ -178,10 +162,8 @@ def fold(
     for event in entries:
         stage = EVENT_STAGES.get(event.event_type)
         if stage is None:
-            # Unknown or non-stage events (notes) are skipped entirely: they
-            # do not appear in the folded timeline and cannot move a stage, so
-            # an unrecognised type can never silently change a funnel count.
-            # The raw event log still has them; this is the fold, not history.
+            # Notes and unrecognised types are not stages, so they stay out of
+            # the fold. The raw log still has them.
             continue
         timeline.append(
             StageEntry(
@@ -221,11 +203,9 @@ def get_or_create(
     operator, enforced by a unique constraint — applying twice to the same role
     is a mistake, not a state.
 
-    ``mark_saved=False`` skips the opening ``saved`` event, for the case where
-    the caller is logging a real stage in the same breath. Recording both would
-    stamp "saved" with the current time while the application it belongs to was
-    back-dated to last month, and the timeline would then claim the operator
-    saved a job three weeks after applying to it.
+    ``mark_saved=False`` skips the opening ``saved`` event, for callers logging a
+    real stage in the same breath -- otherwise a back-dated application gets a
+    "saved" stamped with the current time, out of order with its own timeline.
     """
     from ..core.config import get_settings
 

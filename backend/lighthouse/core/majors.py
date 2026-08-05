@@ -1,19 +1,8 @@
-"""Majors, and what they imply about the roles worth showing someone.
+"""Maps a major onto the role families worth showing someone.
 
-Lighthouse is for students, so "what do you study" is the question it can
-actually ask — and it is a far better opening filter than asking a sophomore to
-pick role families out of a taxonomy they have never seen. A finance major
-should not have to know that Lighthouse calls their world ``finance`` and
-``business``; they should type "Finance" and get the right list.
-
-The mapping is deliberately generous. A CS major gets swe, ai_ml, data *and*
-quant, because plenty of CS students end up in all four and hiding a lane is
-worse than showing one the operator can uncheck. It is a starting point that
-seeds the filter, never a cage: ``target_role_families`` is editable
-immediately afterwards, and this module is only consulted when it is empty.
-
-Matching is on keywords rather than exact names because majors are written a
-hundred ways ("CS", "Computer Science & Engineering", "B.S. Computer Science").
+Keyword-matched, since majors are written a hundred ways. Deliberately generous
+-- hiding a lane is worse than showing one the operator can uncheck -- and
+returns nothing for an unrecognised major rather than guessing.
 """
 
 from __future__ import annotations

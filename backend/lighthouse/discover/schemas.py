@@ -1,13 +1,8 @@
-"""API response shapes for Discover.
+"""Response shapes for Discover.
 
-Two conventions worth noting, both from the project's operating principles:
-
-* A posting always reports **how** its term was resolved, not a confidence
-  score. ``term_rule`` and ``term_evidence`` travel with every row so the UI
-  can show "term from title" rather than an opaque number.
-* ``description_available`` is exposed deliberately. A match computed from a
-  title alone is much weaker evidence than one computed from a full
-  description, and the UI has to be able to say so.
+Postings carry ``term_rule`` and ``term_evidence`` so the UI can say how a cycle
+was resolved, and ``description_available`` so it can say how much a match score
+is worth.
 """
 
 from __future__ import annotations

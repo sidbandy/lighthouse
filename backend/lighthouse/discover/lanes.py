@@ -1,21 +1,8 @@
-"""The three-lane view: reach, target, safety.
+"""Assigns postings to reach / target / safety.
 
-A single ranked list quietly buries ambitious applications and produces a
-season of only-safe ones. Splitting by selectivity forces the operator to keep
-a few genuine reaches alive alongside the realistic bulk.
-
-Selectivity comes from a small hand-maintained company tier table, not a model
--- that is thirty lines of config, and pretending to learn it would be false
-precision. Match quality comes from the corpus scoring. A posting's lane is the
-combination:
-
-* **Reach**   - highly selective, or a strong role where the match is thinner.
-  Worth a shot, but not where the bulk of applications should go.
-* **Target**  - a realistic match at a realistic bar. The core of the season.
-* **Safety**  - a strong match at a less competitive company.
-
-Every lane also gets a suggested weekly quota, so "apply broadly" becomes a
-concrete plan rather than a vague intention.
+Selectivity comes from a small hand-maintained tier table rather than a model --
+thirty lines of config, where pretending to learn it would be false precision.
+Match quality comes from the corpus. Each lane carries a suggested weekly quota.
 """
 
 from __future__ import annotations
@@ -23,14 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-# Company selectivity tiers. Hand-maintained; the operator can edit these.
-# Higher tier = more selective. Kept deliberately small and legible.
-# A tier answers one question only: how hard is this company to get into. It
-# deliberately says nothing about whether the operator wants to work there --
-# that is the personal ``operator_targets`` table. Folding the two together once
-# demoted every company the operator marked as a target down to mid selectivity,
-# so wanting Jane Street moved it out of Reach and into Target. Wanting never
-# moves the bar.
+# How hard a company is to get into. Says nothing about whether the operator
+# wants to work there -- that lives in operator_targets. Hand-maintained; higher
+# is more selective.
 TIER_ELITE = "elite"  # FAANG-tier, top quant (Jane Street, Citadel, ...)
 TIER_HIGH = "high"  # strong tech / well-known unicorns
 TIER_MID = "mid"  # solid mid-size and growth companies

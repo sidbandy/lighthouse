@@ -1,19 +1,8 @@
 """Corpus and onboarding endpoints.
 
-The corpus is the spine: match scoring, resume tailoring, stories and mock
-feedback all read from it, so until the operator can edit it in the app,
-everything personal about Lighthouse is only as good as whatever a script
-happened to seed. These endpoints are what make it theirs.
-
-Two things worth noting about the design:
-
-* **Extraction and commitment are separate calls.** ``POST /corpus/extract``
-  reads a PDF and returns drafts; ``POST /corpus/facts/bulk`` saves the ones
-  the operator kept. Nothing is written in between. That split is the
-  zero-fabrication rule expressed as an API rather than as a convention.
-* **Every write invalidates the match index.** A fact the operator just added
-  has to change the next score they see, otherwise the corpus feels inert and
-  they stop trusting it.
+Extraction and commitment are separate calls: ``/corpus/extract`` returns drafts
+and saves nothing, ``/corpus/facts/bulk`` saves what the operator kept. Corpus
+writes invalidate the match index so the next score reflects the edit.
 """
 
 from __future__ import annotations

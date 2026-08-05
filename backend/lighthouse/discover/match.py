@@ -1,23 +1,9 @@
-"""Matching a posting against the operator's corpus.
+"""Scores a posting against the corpus.
 
-The score is the *secondary* output. What actually changes behaviour is the
-term-level breakdown: which of the posting's emphasised words the operator can
-already evidence, and which they genuinely cannot. A number tells you a role is
-a 62; a gap list tells you the posting says "Kubernetes" six times and your
-corpus has never mentioned it, which is something you can act on.
-
-Scoring uses BM25 over the corpus vocabulary, which is a well-understood
-lexical ranking function with two useful properties here:
-
-* **Saturation.** A posting repeating "Python" twenty times does not score
-  twenty times higher than one mentioning it twice; the marginal value of each
-  repeat falls away.
-* **Rarity weighting.** Matching on "Verilog" is worth more than matching on
-  "software", because the latter appears in nearly every posting.
-
-Both are computed from counts we can show. Nothing here is a prediction, and
-no term is ever recommended that the operator cannot already evidence -- the
-gap list names missing skills, it does not suggest keywords to insert.
+The term-level breakdown is the point; the number is secondary. BM25 gives
+saturation (a posting repeating "Python" twenty times is not ten times a better
+match than one saying it twice) and rarity weighting, both computed from counts
+that can be shown.
 """
 
 from __future__ import annotations

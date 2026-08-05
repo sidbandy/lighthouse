@@ -1,31 +1,8 @@
-"""What the corpus is actually worth in the market the operator is looking at.
+"""Measures the corpus against the postings currently ingested.
 
-A corpus editor that only lists facts is a filing cabinet. The question the
-operator really has is *"does adding this project help me?"* -- and that is
-answerable from data already sitting in the database, without a model and
-without inventing anything.
-
-For every fact, this module reports:
-
-* the skill terms it contributes, using the same signal rule the per-posting
-  match uses, so the two views can never disagree;
-* how many live postings emphasise those terms -- an observed count over a
-  stated sample, not a score;
-* how many of those postings *no other fact* reaches, which is the honest
-  answer to "is this project pulling its weight or is it redundant?"
-
-And for the corpus as a whole, the terms the market emphasises that no fact can
-evidence. That is the same three-bucket honesty the resume tailor uses, lifted
-to corpus level: a real gap is reported as a gap, never as a keyword to add.
-
-Two rules shape everything here:
-
-* **Every number is a count over a stated sample.** The sample is postings that
-  carry a real description, because a title-only row is not evidence of what a
-  role emphasises. The sample size travels with every result so a figure drawn
-  from 40 postings can never be mistaken for one drawn from 4,000.
-* **Nothing is predicted.** "37 of 425 postings emphasise a term you can
-  evidence" is a fact. "You have a 37% chance" would be a fabrication.
+Reports, per fact, the skill terms it contributes and how many sampled postings
+mention them, plus the postings no *other* fact reaches. All counts, over a
+stated sample of postings that carry a real description.
 """
 
 from __future__ import annotations
@@ -118,14 +95,10 @@ class MarketIndex:
     def in_demand(self, limit: int = 60, *, skills_only: bool = True) -> list[TermDemand]:
         """The most widely demanded terms, most postings first.
 
-        ``skills_only`` keeps this to recognised skill vocabulary, and it
-        matters more than it looks. A general word repeated in *one* posting is
-        real signal about that role -- which is why the per-posting match counts
-        it -- but aggregated across a whole market the top of the list becomes
-        "engineer", "software", "technology", "problems": job-posting nouns that
-        no one can act on. Reported as gaps they would be noise wearing the
-        costume of insight, so the market view is narrowed to terms that name an
-        actual skill.
+        ``skills_only`` restricts this to recognised skill vocabulary. A general
+        word repeated within one posting is signal about that role, but across a
+        whole market the top of the list is just "engineer", "software",
+        "technology" -- nothing anyone can act on.
         """
         candidates = [d for d in self._demand.values() if d.is_technical or not skills_only]
         return sorted(candidates, key=lambda d: (-d.posting_count, -d.core_count, d.term))[:limit]

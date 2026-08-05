@@ -1,19 +1,10 @@
-"""The corpus service: the operator's own facts and stories.
+"""The operator's own facts and stories.
 
-This is the spine of the whole tool. Match scoring, the keyword tailor, stories
-and mock feedback all read from here, which is what stops the resume, the STAR
-answers and the outreach from telling three different versions of one history.
-
-Two rules from the project's principles are enforced structurally rather than
-by convention:
-
-* **Zero fabrication.** A story must reference at least one real fact. A story
-  with no ``source_fact_ids`` is stored, but flagged unverified and excluded
-  from anything that grounds interview practice, because we will not coach the
-  operator to repeat something that does not trace to a real fact.
-* **Nothing is generated.** The operator writes their own material; this module
-  only stores, retrieves and scores it. Resume extraction turns a PDF into
-  editable draft facts for the operator to correct -- it does not invent them.
+Everything personal reads from here, which is what stops the resume, the STAR
+answers and the outreach telling three versions of one history. Two rules are
+enforced structurally: a story with no ``source_fact_ids`` is flagged unverified
+and excluded from interview grounding, and nothing in this module generates
+content -- it stores, retrieves and scores what the operator wrote.
 """
 
 from __future__ import annotations

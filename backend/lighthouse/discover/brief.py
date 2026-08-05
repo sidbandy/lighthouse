@@ -1,20 +1,8 @@
-"""The posting brief: the facts buried in a job description, pulled to the top.
+"""Pulls the decision-relevant facts out of a job description.
 
-A job description is two thousand words of prose hiding about eight facts that
-actually decide whether you apply — what it pays, where you have to be, when it
-closes, how long it runs, what the interview looks like, and whether you clear
-the hard filters. Reading for those is the tax this module removes.
-
-Everything here is **extracted, never inferred**. Each fact carries the sentence
-it came from, so the operator can check it in one glance and catch the parser
-being wrong. If a posting does not state a salary, the brief says nothing about
-salary — it does not estimate one from the title, the company or the market,
-because a number the posting never said is a fabrication no matter how
-reasonable it looks.
-
-What this deliberately does not do: rank, score, or summarise in prose. The
-summary of a job description is the job description; what is missing is
-structure.
+Pay, working pattern, length, deadline, GPA floor, named interview stages and
+the lines describing the work. Everything is extracted rather than inferred,
+and each fact carries the sentence it came from so a bad parse is visible.
 """
 
 from __future__ import annotations
@@ -129,12 +117,10 @@ _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
 
 @dataclass(slots=True)
 class Fact:
-    """One extracted fact, with the text it came from.
+    """One extracted fact, with the sentence it came from.
 
-    ``evidence`` is not decoration. A regex over free prose is wrong often
-    enough that a figure without its source is worse than no figure — the
-    operator has to be able to see that "$150,000" came from a sentence about
-    the company's funding round rather than the offer.
+    Regexes over free prose are wrong often enough that a figure needs to be
+    checkable against its source.
     """
 
     kind: str

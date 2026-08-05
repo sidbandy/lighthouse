@@ -1,21 +1,8 @@
 """The append-only event log.
 
-Every state change in Lighthouse is a row here, and nothing is ever updated in
-place. That is not bookkeeping for its own sake — it is what makes the honest
-answers possible:
-
-* **"How long do these people actually take?"** needs the date the OA arrived,
-  not a status field that has since moved on.
-* **"Am I being ghosted?"** is a question about elapsed time since a real dated
-  event, which a mutable ``status = 'applied'`` column cannot answer.
-* **Funnel counts** have to survive the operator correcting a mistake. Folding a
-  log means a correction is a new fact, not the destruction of an old one.
-
-Two timestamps, and the distinction matters. ``occurred_at`` is when the thing
-happened in the world; ``recorded_at`` is when the operator got round to logging
-it. They routinely differ by days — you find the rejection email on Thursday and
-it was sent on Monday. Anything measuring the *process* uses ``occurred_at``;
-anything measuring the operator's own freshness uses ``recorded_at``.
+Nothing is updated in place. ``occurred_at`` is when something happened,
+``recorded_at`` is when it was logged; they routinely differ by days, so
+process metrics use the former and freshness checks the latter.
 """
 
 from __future__ import annotations

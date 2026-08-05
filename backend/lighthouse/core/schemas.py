@@ -1,14 +1,4 @@
-"""API response shapes for the corpus and onboarding.
-
-The conventions here follow the project's operating principles:
-
-* **Drafts are never facts.** Resume extraction returns
-  :class:`DraftFactOut` objects that carry no id, because nothing has been
-  saved. They become facts only when the operator confirms them, which is what
-  keeps the corpus free of anything a human has not vouched for.
-* **Counts, with their sample.** Every figure in :class:`CoverageOut` is an
-  observed count, and the sample it was drawn from travels alongside it.
-"""
+"""Request and response shapes for the corpus and onboarding endpoints."""
 
 from __future__ import annotations
 

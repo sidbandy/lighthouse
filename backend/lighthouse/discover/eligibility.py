@@ -1,25 +1,8 @@
-"""Can this student actually apply for this role?
+"""Checks a posting's stated graduation window against the operator's.
 
-The commonest wasted application a student makes is to a posting they were never
-eligible for. Internships state a graduation window — "graduating in 2027",
-"class of 2028", "must be returning to school after the internship" — and a
-junior applying to a new-grad role, or a senior applying to an internship that
-requires returning to study, is rejected by a filter before anyone reads a word
-of the résumé.
-
-That check is pure comparison. The posting states a year; the profile states a
-year; they either overlap or they do not. So this module reports one of three
-things and never a fourth:
-
-* **eligible** — the posting's stated window includes the operator's graduation.
-* **not eligible** — it explicitly does not, with both years shown.
-* **not stated** — the posting says nothing, which is the most common case and
-  must never be reported as a pass or a fail.
-
-Every verdict carries the sentence it was drawn from. A regex reading a
-graduation window out of prose is wrong often enough that a student should be
-able to check it before deciding not to apply — the cost of a false "not
-eligible" is an application they should have sent.
+Applying outside a stated class-year window is the commonest wasted application
+a student makes. Reports eligible, not eligible, or not stated -- the last of
+which is the usual answer and is never reported as either of the others.
 """
 
 from __future__ import annotations

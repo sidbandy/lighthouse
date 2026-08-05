@@ -1,21 +1,8 @@
-"""Funnel analytics, kept honest.
+"""Funnel counts over folded application states.
 
-The temptation here is obvious and the project's first principle forbids it: a
-student with nine applications and one interview does not have an "11% interview
-rate", and telling them so invents precision from a sample that cannot support
-it. Nine applications is nine applications.
-
-So this module reports:
-
-* **Counts** at each stage, which are facts.
-* **Conversion between stages, but only once enough applications have reached
-  the earlier one to be worth stating** — and always rendered as "3 of 21", the
-  ratio shown with both its numbers so the reader can judge it themselves.
-* **Real elapsed days** between stages, as observed medians with the sample size
-  attached, never as a fitted distribution or an expected wait.
-
-Below :data:`MIN_SAMPLE` the answer is "not enough data yet", which is an honest
-and useful state rather than a gap to be filled with a guess.
+Conversions are measured from Applied and shown with both numbers; below
+``MIN_SAMPLE`` no percentage is given at all. Wait times are observed medians
+with their sample size, never a fitted distribution.
 """
 
 from __future__ import annotations
@@ -130,13 +117,11 @@ FUNNEL_PATH: tuple[Stage, ...] = (
 
 
 def logged_at(state: ApplicationState, stage: Stage) -> bool:
-    """Whether an event was logged at *exactly* this stage.
+    """Whether an event was logged at exactly this stage.
 
-    Stage counts use this rather than "got at least this far", because the
-    pipeline is not uniform: plenty of roles have no online assessment at all,
-    and an application that went straight from applied to interview never
-    reached an assessment. Counting it as though it had would inflate the
-    assessment row and make the step out of it meaningless.
+    Stage counts use this rather than "at least this far": many roles have no
+    online assessment, and an application that went applied -> interview never
+    reached one.
     """
     return any(entry.stage == stage for entry in state.timeline)
 
@@ -144,11 +129,8 @@ def logged_at(state: ApplicationState, stage: Stage) -> bool:
 def progressed_to(state: ApplicationState, stage: Stage) -> bool:
     """Whether this application got at least this far.
 
-    Used for conversions, where the question genuinely is about depth: an
-    application that reached a final round did interview, and one that was
-    rejected after interviewing still interviewed. Terminal entries are excluded
-    so a rejection — which sorts above every live stage — cannot count as
-    progress.
+    Terminal entries are excluded so a rejection, which sorts above every live
+    stage, does not count as progress.
     """
     return any(entry.stage >= stage and not entry.stage.is_terminal for entry in state.timeline)
 
@@ -158,14 +140,8 @@ def _first_at(state: ApplicationState, stage: Stage):
 
 
 def _first_response(state: ApplicationState):
-    """When the employer first said anything at all.
-
-    A rejection counts. It is the most common reply an application gets and
-    frequently the only one, so excluding it would leave "time to first
-    response" measuring time-to-*good*-news while claiming otherwise — and it
-    would quietly drop the majority of the sample. Operator actions are excluded
-    because they are not the employer replying.
-    """
+    """When the employer first said anything. A rejection counts: it is the most
+    common reply, and often the only one."""
     return next(
         (
             e.occurred_at
@@ -179,15 +155,9 @@ def _first_response(state: ApplicationState):
 def build(states: list[ApplicationState], *, today: date | None = None) -> FunnelReport:
     """Compute the funnel from folded application states.
 
-    Only applications that were actually sent are counted. A bookmark sitting in
-    the Saved column is not an application, and letting it inflate ``total``
-    would put "across 12 applications" above conversions all measured out of 6 —
-    the denominator on screen disagreeing with the one behind the numbers.
-
-    Every conversion is measured from **applied**, not between consecutive
-    stages. That is the one denominator that always means the same thing; a
-    consecutive-pair rate would assume every application walks an identical
-    path, which is exactly the fiction this project is meant to avoid.
+    Counts only applications actually sent; a saved bookmark is not an
+    application. Conversions are measured from Applied rather than between
+    consecutive stages, since not every application passes through every stage.
     """
     states = [s for s in states if progressed_to(s, Stage.APPLIED)]
     report = FunnelReport(total=len(states))

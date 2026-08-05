@@ -1,21 +1,9 @@
-"""Text analysis: tokenising, stemming, and finding the terms that matter.
+"""Tokenising, stemming, and finding the terms that matter.
 
-Deliberately pure Python with no ML dependencies. That is not only a size
-constraint -- it is the right tool for the job. Every term this module
-surfaces is traceable to a literal word in the source text, so the operator can
-always be shown *why* something scored the way it did. An embedding gives a
-number nobody can argue with; a term count can be checked against the posting.
-
-Three things live here:
-
-* A tokeniser that understands technical writing, where ``C++``, ``.NET`` and
-  ``CI/CD`` are single tokens rather than punctuation to discard.
-* A light suffix stemmer, so "engineer"/"engineering" and "deploy"/"deployed"
-  collapse together. It deliberately leaves curated technical terms untouched,
-  so "kubernetes" is never mangled into "kubernet" -- which means a term that
-  is both a tech term and inflected (rare) matches on its literal form only.
-* A curated dictionary of technical terms and multi-word phrases, which is what
-  separates "Kubernetes" from "opportunity" without a model.
+Pure Python with no ML dependencies, which is also the right tool: every term
+surfaced is traceable to a literal word in the source, so a score can always be
+explained. A conservative suffix stemmer leaves curated technical terms intact,
+and a curated vocabulary is what separates "Kubernetes" from "opportunity".
 """
 
 from __future__ import annotations
@@ -293,12 +281,8 @@ _NO_STEM: frozenset[str] = frozenset(
 )  # fmt: skip
 
 
-# Names for the same skill. Without this a project saying "Postgres" and a skill
-# fact saying "PostgreSQL" evidence *different* terms, so neither gets full
-# credit and the tool can report a gap the operator does not actually have --
-# which breaks the zero-fabrication rule from the other direction, since a false
-# gap is as dishonest as a false strength. Curated and small on purpose: only
-# pairs that are unambiguously the same thing.
+# Names for the same skill, collapsed to one stem so "Postgres" and "PostgreSQL"
+# are not scored as two. Only unambiguous pairs belong here.
 SYNONYMS: dict[str, str] = {
     "postgresql": "postgres",
     "psql": "postgres",
