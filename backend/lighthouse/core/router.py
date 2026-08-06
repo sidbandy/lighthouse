@@ -34,7 +34,10 @@ from .schemas import (
     FactContributionOut,
     FactIn,
     FactOut,
+    MajorOptionsOut,
     OnboardingOut,
+    StudentProfileIn,
+    StudentProfileOut,
     TargetCompanyOut,
     TermDemandOut,
 )
@@ -258,6 +261,16 @@ def _target_out(company: Company) -> TargetCompanyOut:
     )
 
 
+def _student_out(session: Session) -> StudentProfileOut | None:
+    student = onboarding_service.load_student_profile(session)
+    return StudentProfileOut(**vars_of(student)) if student else None
+
+
+def vars_of(record) -> dict:
+    """Field values of a slots dataclass, which has no ``__dict__``."""
+    return {f: getattr(record, f) for f in record.__slots__}
+
+
 def _onboarding_out(session: Session) -> OnboardingOut:
     constraints = onboarding_service.load_constraints(session)
     state = onboarding_service.onboarding_state(session, constraints=constraints)
@@ -272,6 +285,7 @@ def _onboarding_out(session: Session) -> OnboardingOut:
             if constraints
             else None
         ),
+        student=_student_out(session),
         targets=[_target_out(c) for c in onboarding_service.target_companies(session)],
     )
 
@@ -350,3 +364,51 @@ def search_companies(
         )
         for company, count in session.execute(stmt)
     ]
+
+
+@router.get("/onboarding/majors", response_model=MajorOptionsOut)
+def major_options() -> MajorOptionsOut:
+    """Majors and degree levels the profile form offers."""
+    from .majors import COMMON_MAJORS, DEGREE_LEVELS
+
+    return MajorOptionsOut(
+        majors=list(COMMON_MAJORS),
+        degree_levels=[{"value": v, "label": lbl} for v, lbl in DEGREE_LEVELS],
+    )
+
+
+@router.get("/onboarding/role-families", response_model=list[str])
+def suggested_role_families(major: str = Query(default="")) -> list[str]:
+    """Role families implied by a major, best fit first. Empty when unrecognised."""
+    from .majors import role_families_for
+
+    return role_families_for(major)
+
+
+@router.put("/onboarding/student", response_model=OnboardingOut)
+def put_student_profile(
+    payload: StudentProfileIn, session: Session = Depends(get_session)
+) -> OnboardingOut:
+    """Save who the operator is academically.
+
+    The graduation term is what lets every posting be checked for its stated
+    class-year window, which is the commonest reason a student's application is
+    filtered out before anyone reads it.
+    """
+    try:
+        onboarding_service.save_student_profile(
+            session,
+            onboarding_service.StudentProfile(
+                school=payload.school,
+                major=payload.major,
+                degree_level=payload.degree_level,
+                graduation_season=payload.graduation_season,
+                graduation_year=payload.graduation_year,
+                internships_completed=payload.internships_completed,
+                target_role_families=payload.target_role_families,
+            ),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return _onboarding_out(session)

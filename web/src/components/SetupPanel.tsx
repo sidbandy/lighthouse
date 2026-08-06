@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { StudentProfileForm } from "./StudentProfileForm";
 import type {
   CompanySuggestion,
   Constraints,
@@ -45,8 +46,9 @@ export function SetupPanel({
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <TargetPicker targets={onboarding.targets} onChange={onChange} />
+      <StudentProfileForm student={onboarding.student} onChange={onChange} />
       <ConstraintsForm constraints={onboarding.constraints} onChange={onChange} />
+      <TargetPicker targets={onboarding.targets} onChange={onChange} />
     </div>
   );
 }

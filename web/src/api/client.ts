@@ -17,11 +17,13 @@ import type {
   Fact,
   FactInput,
   LaneBucket,
+  MajorOptions,
   Onboarding,
   PostingDetail,
   RefreshStatus,
   RoleFamily,
   SourceHealth,
+  StudentProfile,
   TailorReport,
 } from "./types";
 
@@ -125,6 +127,11 @@ export const api = {
   saveConstraints: (constraints: Constraints) =>
     send<Onboarding>("PUT", "/api/onboarding/constraints", constraints),
   saveTargets: (names: string[]) => send<Onboarding>("PUT", "/api/onboarding/targets", names),
+  majorOptions: () => get<MajorOptions>("/api/onboarding/majors"),
+  roleFamiliesFor: (major: string) =>
+    get<string[]>("/api/onboarding/role-families", { major }),
+  saveStudentProfile: (profile: Partial<StudentProfile>) =>
+    send<Onboarding>("PUT", "/api/onboarding/student", profile),
   searchCompanies: (q: string, limit = 20) =>
     get<CompanySuggestion[]>("/api/companies/search", { q, limit }),
 

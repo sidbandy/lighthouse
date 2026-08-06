@@ -119,6 +119,36 @@ class ConstraintsOut(ConstraintsIn):
     pass
 
 
+class StudentProfileIn(BaseModel):
+    """The academic half of the profile. Internship counts, not years."""
+
+    school: str | None = None
+    major: str | None = None
+    degree_level: str | None = Field(
+        default=None, description="associate | bachelors | masters | phd"
+    )
+    graduation_season: str | None = Field(
+        default=None, description="spring | summer | fall | winter"
+    )
+    graduation_year: int | None = Field(default=None, ge=2000, le=2100)
+    internships_completed: int = Field(default=0, ge=0, le=20)
+    target_role_families: list[str] = Field(
+        default_factory=list,
+        description="Left empty, these are seeded from the major.",
+    )
+
+
+class StudentProfileOut(StudentProfileIn):
+    pass
+
+
+class MajorOptionsOut(BaseModel):
+    """What the profile form offers. Free text is still accepted for major."""
+
+    majors: list[str]
+    degree_levels: list[dict[str, str]]
+
+
 class TargetCompanyOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -138,6 +168,7 @@ class OnboardingOut(BaseModel):
     target_company_count: int
     constraints_set: bool
     constraints: ConstraintsOut | None = None
+    student: StudentProfileOut | None = None
     targets: list[TargetCompanyOut] = Field(default_factory=list)
 
 

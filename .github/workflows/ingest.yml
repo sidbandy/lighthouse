@@ -1,0 +1,55 @@
+name: Refresh postings
+
+# Ingest runs here rather than inside the API so the API can stay stateless and
+# deploy to a platform that freezes between requests. A full run takes about a
+# minute across ~95 sources, which no HTTP request should be holding open.
+on:
+  schedule:
+    # 06:00 and 18:00 UTC. Postings appear through the working day and rolling
+    # review means the first applicants are read first, so twice daily is the
+    # point of diminishing returns for a free runner.
+    - cron: "0 6,18 * * *"
+  workflow_dispatch:
+    inputs:
+      max_tier:
+        description: "1-2 is the fast path; 3 adds the ATS boards that carry full descriptions"
+        required: false
+        default: "3"
+
+concurrency:
+  # Two runs would race on the same dedup keys for no benefit.
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ./backend
+
+      - name: Migrate
+        working-directory: backend
+        env:
+          LIGHTHOUSE_DATABASE_URL: ${{ secrets.LIGHTHOUSE_DATABASE_URL }}
+        run: alembic upgrade head
+
+      - name: Ingest
+        env:
+          LIGHTHOUSE_DATABASE_URL: ${{ secrets.LIGHTHOUSE_DATABASE_URL }}
+        run: |
+          python -m lighthouse.cli ingest --max-tier "${{ inputs.max_tier || '3' }}"
+
+      - name: Source health
+        if: always()
+        env:
+          LIGHTHOUSE_DATABASE_URL: ${{ secrets.LIGHTHOUSE_DATABASE_URL }}
+        run: python -m lighthouse.cli sources

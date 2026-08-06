@@ -23,7 +23,8 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .corpus import CorpusSummary, FactInput, add_fact, summarize
-from .models import Company, OperatorProfile, OperatorTarget
+from .majors import DEGREE_LEVELS
+from .models import Company, OperatorProfile, OperatorTarget, Season
 from .resume import ExtractedResume, extract_pdf
 
 # Sponsorship stance drives a top-level filter, so it is asked up front.
@@ -39,6 +40,20 @@ class OperatorConstraints:
     sponsorship: str = "us_authorized"
     weekly_study_hours: int = 10
     target_cycles: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class StudentProfile:
+    """Who the operator is academically. Counts of internships, not years of
+    experience -- a sophomore has none of the latter."""
+
+    school: str | None = None
+    major: str | None = None
+    degree_level: str | None = None
+    graduation_season: str | None = None
+    graduation_year: int | None = None
+    internships_completed: int = 0
+    target_role_families: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -186,6 +201,66 @@ def load_constraints(
         weekly_study_hours=profile.weekly_study_hours,
         target_cycles=list(profile.target_cycles or []),
     )
+
+
+def load_student_profile(
+    session: Session, *, user_id: uuid.UUID | None = None
+) -> StudentProfile | None:
+    profile = load_profile(session, user_id=user_id)
+    if profile is None:
+        return None
+    return StudentProfile(
+        school=profile.school,
+        major=profile.major,
+        degree_level=profile.degree_level,
+        graduation_season=profile.graduation_season.value if profile.graduation_season else None,
+        graduation_year=profile.graduation_year,
+        internships_completed=profile.internships_completed,
+        target_role_families=list(profile.target_role_families or []),
+    )
+
+
+def save_student_profile(
+    session: Session, data: StudentProfile, *, user_id: uuid.UUID | None = None
+) -> OperatorProfile:
+    """Upsert the academic half of the profile.
+
+    Role families are seeded from the major on first save so a student is not
+    asked to pick out of a taxonomy they have never seen; once set, whatever
+    they chose is kept.
+    """
+    from .majors import role_families_for
+
+    if data.degree_level and data.degree_level not in {level for level, _ in DEGREE_LEVELS}:
+        raise ValueError(f"unknown degree_level {data.degree_level!r}")
+    if data.graduation_year is not None and not (2000 <= data.graduation_year <= 2100):
+        raise ValueError("graduation_year is outside a plausible range")
+    if data.internships_completed < 0:
+        raise ValueError("internships_completed cannot be negative")
+    season = None
+    if data.graduation_season:
+        try:
+            season = Season(data.graduation_season.lower())
+        except ValueError as exc:
+            raise ValueError(f"unknown graduation_season {data.graduation_season!r}") from exc
+
+    uid = user_id or _operator_id()
+    profile = session.scalar(select(OperatorProfile).where(OperatorProfile.user_id == uid))
+    if profile is None:
+        profile = OperatorProfile(user_id=uid)
+        session.add(profile)
+
+    profile.school = (data.school or "").strip() or None
+    profile.major = (data.major or "").strip() or None
+    profile.degree_level = data.degree_level
+    profile.graduation_season = season
+    profile.graduation_year = data.graduation_year
+    profile.internships_completed = data.internships_completed
+
+    families = [f.strip() for f in data.target_role_families if f.strip()]
+    profile.target_role_families = families or role_families_for(profile.major)
+    session.flush()
+    return profile
 
 
 def save_constraints(

@@ -324,6 +324,25 @@ export type OnboardingStep =
   | "set_constraints"
   | "complete";
 
+export type DegreeLevel = "associate" | "bachelors" | "masters" | "phd";
+
+/** Who the operator is academically. Internship counts, not years of experience. */
+export interface StudentProfile {
+  school: string | null;
+  major: string | null;
+  degree_level: DegreeLevel | null;
+  graduation_season: Season | null;
+  graduation_year: number | null;
+  internships_completed: number;
+  /** Seeded from the major when left empty. */
+  target_role_families: RoleFamily[];
+}
+
+export interface MajorOptions {
+  majors: string[];
+  degree_levels: { value: string; label: string }[];
+}
+
 export interface Onboarding {
   next_step: OnboardingStep;
   is_complete: boolean;
@@ -331,6 +350,7 @@ export interface Onboarding {
   target_company_count: number;
   constraints_set: boolean;
   constraints: Constraints | null;
+  student: StudentProfile | null;
   targets: TargetCompany[];
 }
 
