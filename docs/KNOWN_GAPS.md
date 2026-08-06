@@ -210,6 +210,30 @@ the number is easy to misread.
 prorated figure alongside — "$250,000/yr · ~$48k over 10 weeks". Do not replace
 the stated figure; add to it.
 
+## Deployment
+
+### Ingest is far too slow against a remote database — `incomplete`
+
+`pipeline.py` persists postings through the ORM row by row. Against local
+Postgres a full tier-1-2 run finishes in about 45 seconds. Against Supabase over
+the network the same run was still going after 20 minutes, because every insert
+and update is its own round trip and there are ~27k postings plus ~37k source
+sightings.
+
+This matters for deployment, not just for patience: `.github/workflows/ingest.yml`
+has a 30-minute timeout and runs against Supabase. **A scheduled ingest will
+likely time out as written.**
+
+**Fix:** batch the writes. `session.bulk_insert_mappings` / `bulk_update_mappings`,
+or a Postgres `INSERT ... ON CONFLICT DO UPDATE` built from the deduped rows,
+turns tens of thousands of round trips into tens. The dedup logic already
+produces a clean list of rows to write, so this is a change to the persistence
+step only. Measure against Supabase, not locally — locally it is fast enough to
+hide the problem entirely.
+
+**Until then:** run ingest locally and treat the local database as the source of
+truth, or raise the workflow timeout and accept a long run.
+
 ## Data hygiene
 
 ### The seeded corpus is still fake — `incomplete` (data, not code)

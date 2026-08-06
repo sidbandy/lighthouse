@@ -5,7 +5,7 @@ import { relativeAge, sourceLabel, sponsorshipLabel, termRuleLabel } from "../li
 import { GhostChecklist } from "./GhostChecklist";
 import { MatchMeter } from "./MatchMeter";
 import { PostingBriefPanel } from "./PostingBriefPanel";
-import { atMidday, today } from "./TrackBoard";
+import { atMidday, today } from "../lib/dates";
 import { TailorPanel } from "./TailorPanel";
 import { TermChips } from "./TermChips";
 

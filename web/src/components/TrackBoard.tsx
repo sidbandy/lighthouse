@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { Application, ApplicationEvent, Board, Stage } from "../api/types";
+import { atMidday, today } from "../lib/dates";
 import { FunnelPanel } from "./FunnelPanel";
 
 // The application board: everything you've applied to, what stage it's at, and
@@ -10,20 +11,6 @@ import { FunnelPanel } from "./FunnelPanel";
 // Dragging implies you choose the stage; you don't — the employer does, and what
 // you're actually doing is recording something that already happened on a date.
 // So the interaction is "log what happened", and the grouping follows.
-
-/** Today as yyyy-mm-dd in the *operator's* timezone, which is the one they mean
- *  when they say "I applied yesterday". `toISOString()` would be UTC and can be
- *  a day off either side of midnight. */
-export function today(): string {
-  const now = new Date();
-  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
-}
-
-/** A yyyy-mm-dd from a date input, sent as an instant the backend can store.
- *  Midday local avoids the date shifting when it is converted to UTC. */
-export function atMidday(day: string): string {
-  return new Date(`${day}T12:00:00`).toISOString();
-}
 
 const COLUMNS: { stage: Stage; title: string; blurb: string; rule: string }[] = [
   {

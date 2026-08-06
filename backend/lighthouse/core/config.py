@@ -8,18 +8,25 @@ change rather than a migration of every row. See the plan, §6 "Data model rules
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from uuid import UUID
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# The fixed singleton operator. Deliberately a real UUID rather than NULL so
-# that personal rows are already scoped correctly the day a second user exists.
+# The fixed singleton operator. A real UUID rather than NULL so that personal
+# rows are already scoped correctly the day a second user exists.
 DEFAULT_OPERATOR_ID = UUID("00000000-0000-4000-8000-000000000001")
+
+# Anchored to the repo rather than the working directory. A relative "env_file"
+# is resolved against CWD, so running alembic from backend/ silently missed the
+# real .env and fell back to the local default -- a migration that reported
+# success while pointing at the wrong database.
+ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="LIGHTHOUSE_", extra="ignore")
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_prefix="LIGHTHOUSE_", extra="ignore")
 
     database_url: str = Field(
         default="postgresql+psycopg://localhost/lighthouse",
