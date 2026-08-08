@@ -116,6 +116,40 @@ def strip_accents(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
 
 
+# Initialisms lose their periods to _PUNCT_RE and come out as separate letters:
+# "D. E. Shaw" -> "d e shaw", which then misses a selectivity table keyed on
+# "de shaw" and lands an elite quant firm in the Target lane. Runs of adjacent
+# single letters are rejoined. Two genuinely different companies would have to
+# differ only in the spacing of an initialism to be wrongly merged by this.
+_INITIALS_RE = re.compile(r"\b(?:[a-z] )+[a-z]\b")
+_DANGLING_AND_RE = re.compile(r"\s+and\s*$")
+
+# Variants that normalisation alone cannot reach, because the strings share no
+# derivation. Hand-maintained and deliberately short: this is for the companies
+# that actually matter to a search, not an attempt at general entity
+# resolution. Fuzzy company merging is how "Meta" and "Meta Materials" become
+# one row.
+COMPANY_ALIASES: dict[str, str] = {
+    "imc": "imc trading",
+    "de shaw group": "de shaw",
+    "optiver us": "optiver",
+    "optiver north america": "optiver",
+    "jane street capital": "jane street",
+    "facebook": "meta",
+    "meta platforms": "meta",
+    "alphabet": "google",
+    "citadel llc": "citadel",
+    "hrt": "hudson river trading",
+    "sig": "susquehanna",
+    "susquehanna international group": "susquehanna",
+    "jpmorgan chase": "jp morgan",
+    "jpmorgan": "jp morgan",
+    "goldman sachs group": "goldman sachs",
+    "amazon web services": "amazon",
+    "aws": "amazon",
+}
+
+
 def canonical_company(name: str) -> str:
     """Blocking key for a company name.
 
@@ -125,8 +159,19 @@ def canonical_company(name: str) -> str:
     text = strip_accents(name or "").lower()
     text = text.replace("&", " and ")
     text = _PUNCT_RE.sub(" ", text)
-    text = _COMPANY_SUFFIX_RE.sub(" ", text)
-    return _WS_RE.sub(" ", text).strip()
+    stripped = _WS_RE.sub(" ", _COMPANY_SUFFIX_RE.sub(" ", text)).strip()
+    # "D.E. Shaw & Co." reaches here as "d e shaw and" -- the ampersand became a
+    # word and the thing it joined was a stripped suffix. A dangling conjunction
+    # is never part of a name.
+    stripped = _DANGLING_AND_RE.sub("", stripped).strip()
+    stripped = _INITIALS_RE.sub(lambda m: m.group(0).replace(" ", ""), stripped)
+
+    # Suffix stripping can eat the name itself: "H&CO" is a company, not the
+    # letter H with a suffix. A key that short blocks against everything, so
+    # fall back to the unstripped form rather than emit it.
+    if len(stripped) < 2:
+        stripped = _WS_RE.sub(" ", text).strip()
+    return COMPANY_ALIASES.get(stripped, stripped)
 
 
 def normalize_title(title: str) -> str:

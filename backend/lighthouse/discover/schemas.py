@@ -13,6 +13,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..core.models import EmploymentType, RoleFamily, Season, Sponsorship
+from ..track.schemas import TrackedStateOut
 
 
 class SourceSighting(BaseModel):
@@ -62,6 +63,13 @@ class PostingSummary(BaseModel):
         default=[], description="Every feed this posting was seen on, deduplicated."
     )
     source_count: int = 0
+
+    tracked: TrackedStateOut | None = Field(
+        default=None,
+        description="Where this posting already sits on the board, or None if untracked. "
+        "On a list of thousands, 'have I applied to this?' is the one question the tool "
+        "should never make you answer from memory.",
+    )
 
 
 class GhostSignalOut(BaseModel):

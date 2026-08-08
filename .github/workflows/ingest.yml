@@ -36,6 +36,19 @@ jobs:
       - name: Install
         run: pip install -e ./backend
 
+      # An unset secret arrives as an empty string, which config rejects with a
+      # pydantic traceback three steps later. Say what is actually wrong.
+      - name: Check the database secret is set
+        env:
+          LIGHTHOUSE_DATABASE_URL: ${{ secrets.LIGHTHOUSE_DATABASE_URL }}
+        run: |
+          if [ -z "$LIGHTHOUSE_DATABASE_URL" ]; then
+            echo "::error::Repository secret LIGHTHOUSE_DATABASE_URL is not set."
+            echo "Settings -> Secrets and variables -> Actions -> New repository secret."
+            echo "Value: the Supabase session-pooler connection string (Connect -> Direct)."
+            exit 1
+          fi
+
       - name: Migrate
         working-directory: backend
         env:

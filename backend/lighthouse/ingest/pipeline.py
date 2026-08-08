@@ -17,14 +17,19 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
-from sqlalchemy import select, tuple_
+from sqlalchemy import select, tuple_, update
 from sqlalchemy.orm import Session
 
-from ..core.models import Company, Posting, PostingSource, SourceHealth
+from ..core.models import Company, OperatorTarget, Posting, PostingSource, SourceHealth
 from .ats_targets import ats_connectors
 from .base import Connector, RawPosting, build_client
 from .dedup import MergedPosting, dedup_stats, deduplicate
-from .normalize import classify_employment_type, classify_role_family, parse_sponsorship
+from .normalize import (
+    canonical_company,
+    classify_employment_type,
+    classify_role_family,
+    parse_sponsorship,
+)
 from .registry import connectors_by_tier
 from .seasons import is_applyable
 from .terms import resolve_term
@@ -121,6 +126,59 @@ def fetch_source(connector: Connector, session: Session) -> tuple[list[RawPostin
     health.last_error = None
     health.is_quarantined = False
     return rows, SourceResult(connector.source_id, ok=True, row_count=len(rows))
+
+
+def reconcile_companies(session: Session) -> int:
+    """Re-key company rows whose stored canonical name is out of date.
+
+    ``canonical_company`` grows: an alias gets added, an initialism stops being
+    split. Rows written under the old key would otherwise sit beside rows
+    written under the new one — "IMC" and "IMC Trading" as two companies, each
+    with half the postings, each able to miss a selectivity tier. Since the key
+    is derived from the display name, the drift is detectable, so this recomputes
+    every key and merges the collisions.
+
+    Idempotent and cheap: one query, and it writes only when something actually
+    moved. Returns the number of rows merged away.
+    """
+    companies = list(session.scalars(select(Company)))
+    by_key = {c.canonical_name: c for c in companies}
+    merged_away = 0
+
+    for company in companies:
+        current = canonical_company(company.name)
+        if current == company.canonical_name:
+            continue
+
+        winner = by_key.get(current)
+        if winner is None or winner is company:
+            by_key.pop(company.canonical_name, None)
+            company.canonical_name = current
+            by_key[current] = company
+            continue
+
+        # Two rows for one company. Keep the one already under the right key and
+        # move everything across; the ATS details are worth carrying over
+        # because either row may be the one that was seeded with them.
+        session.execute(
+            update(Posting).where(Posting.company_id == company.id).values(company_id=winner.id)
+        )
+        session.execute(
+            update(OperatorTarget)
+            .where(OperatorTarget.company_id == company.id)
+            .values(company_id=winner.id)
+        )
+        winner.ats_vendor = winner.ats_vendor or company.ats_vendor
+        winner.ats_slug = winner.ats_slug or company.ats_slug
+        winner.careers_url = winner.careers_url or company.careers_url
+        winner.tier = winner.tier or company.tier
+        by_key.pop(company.canonical_name, None)
+        session.delete(company)
+        merged_away += 1
+
+    if merged_away or any(c.canonical_name != canonical_company(c.name) for c in companies):
+        session.flush()
+    return merged_away
 
 
 def _get_or_create_company(session: Session, merged: MergedPosting, cache: dict) -> Company:
@@ -256,6 +314,10 @@ def run_ingest(
     complete usable list; higher tiers add breadth at the cost of time.
     """
     today = today or datetime.now(UTC).date()
+    # Before anything is written, bring existing company rows up to the current
+    # normalisation so this run does not add a second row for a company that is
+    # already here under an older key.
+    reconcile_companies(session)
     if connectors is None:
         connectors = connectors_by_tier(max_tier)
         if max_tier >= 3:

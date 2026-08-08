@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { AtsReport } from "../api/types";
 import { AtsFindings } from "./AtsFindings";
@@ -84,6 +84,7 @@ export function ResumeCheck() {
       {report && (
         <div className="space-y-5 animate-fade-in">
           <Verdict report={report} />
+          <SaveVersion report={report} fileName={fileName} />
           {report.preview && <ParsePreview preview={report.preview} />}
           <div>
             <h3 className="text-2xs font-600 uppercase tracking-wide text-navy-600 mb-2">
@@ -93,6 +94,66 @@ export function ResumeCheck() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Record this résumé as a version, so the board can say which one went where.
+ *
+ * Worth the extra click: a funnel over one undifferentiated pile can tell you
+ * how the search is going, but not whether the rewrite did anything. That
+ * comparison is most of what version tracking is for.
+ */
+function SaveVersion({ report, fileName }: { report: AtsReport; fileName: string | null }) {
+  const suggested = (fileName ?? "").replace(/\.pdf$/i, "");
+  const [label, setLabel] = useState(suggested);
+  const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLabel(suggested);
+    setState("idle");
+  }, [suggested]);
+
+  if (state === "saved") {
+    return (
+      <p className="text-2xs text-good">
+        ✓ Saved as “{label}”. Pick it on an application to record that this is the one you sent.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <input
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        placeholder="Name this version, e.g. “v3 — security lead”"
+        className="field text-xs flex-1 min-w-[16rem]"
+      />
+      <button
+        className="btn-toggle text-xs shrink-0"
+        disabled={state === "saving" || !label.trim()}
+        title="Record this résumé so the board can track which applications used it"
+        onClick={() => {
+          setState("saving");
+          setError(null);
+          api
+            .saveResumeVersion({
+              label: label.trim(),
+              extracted_text: report.preview?.ats_text ?? "",
+            })
+            .then(() => setState("saved"))
+            .catch((e) => {
+              setError(String((e as Error).message ?? e));
+              setState("idle");
+            });
+        }}
+      >
+        {state === "saving" ? "Saving…" : "Save as a version"}
+      </button>
+      {error && <span className="text-2xs text-bad">{error}</span>}
     </div>
   );
 }

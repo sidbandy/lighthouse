@@ -34,29 +34,15 @@ looks arbitrary.
 
 ## Worth building, roughly in order of value
 
-### Show tracked state everywhere a posting appears
-
-Right now the drawer always offers "Save" and "I applied" even for something
-already on the board, and Discover gives no hint which postings are tracked. On
-a list of thousands, "have I already applied to this?" is the question the tool
-should never make you answer from memory.
-
-Needs one field on `PostingSummary` (the current stage, or null), which is a
-single join. Then: a marker on the card, and the drawer showing the real stage
-plus valid transitions instead of the save buttons. **This is the highest-value
-frontend item.** Also tracked in `KNOWN_GAPS.md`.
-
-### A date control on every stage transition
-
-The board logs everything as "now". Back-filling a real search — the first thing
-anyone does — produces twelve applications all dated today and every wait-time
-figure downstream is then wrong. The API already accepts `occurred_at`.
-
 ### Saved views / filter presets
 
-The filter bar resets on reload. Someone applying seriously runs the same three
-or four queries repeatedly ("SWE + Summer 2027 + full descriptions"). Persist to
-`localStorage` first; move to the profile once multi-user lands.
+The filter bar resets on reload, and there are now ten filters rather than three,
+so rebuilding a query costs more than it used to. Someone applying seriously runs
+the same three or four repeatedly ("SWE + Summer 2027 + full descriptions").
+
+Routing is in place, so the natural home is the query string rather than
+`localStorage` — that makes a view shareable and survives reload for free. Move
+to the profile once multi-user lands.
 
 ### Keyboard navigation on Discover
 
@@ -99,6 +85,8 @@ worth knowing it does not work rather than discovering it in front of a friend.
   They have drifted zero times so far because the surface is small, but the
   moment it grows, generate them from the OpenAPI schema FastAPI already serves
   at `/openapi.json`.
-- **No router.** `App.tsx` switches on a `view` string, so no deep links and no
-  back button. Add `react-router` when a URL needs to be shareable — which is
-  the moment friends start using it.
+- **Routing is `react-router`, and the posting window has its own URL**
+  (`/discover/:postingId`). Added at four pages rather than at twelve, because
+  the company page, contact pages, study plan, mock session and day-of kit all
+  need one. A deployed build needs the host to rewrite unknown paths to
+  `index.html`, or a reload on `/corpus` will 404.

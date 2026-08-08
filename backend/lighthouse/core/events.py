@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -74,6 +74,30 @@ def history(
             .order_by(Event.occurred_at, Event.recorded_at)
         )
     )
+
+
+def discard(
+    session: Session,
+    *,
+    entity_type: str,
+    entity_id: uuid.UUID,
+    user_id: uuid.UUID | None = None,
+) -> int:
+    """Delete one entity's whole history. The single exception to append-only.
+
+    Only for an entity being removed because tracking it was a mistake: there is
+    no fact left to preserve, and the alternative is a log that accumulates
+    events for things that no longer exist and skews any later "how much have I
+    logged" figure. Returns the number removed.
+    """
+    result = session.execute(
+        delete(Event).where(
+            Event.user_id == (user_id or _operator_id()),
+            Event.entity_type == entity_type,
+            Event.entity_id == entity_id,
+        )
+    )
+    return int(result.rowcount or 0)
 
 
 def history_for_many(

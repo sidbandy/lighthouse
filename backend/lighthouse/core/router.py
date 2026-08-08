@@ -24,6 +24,7 @@ from .db import get_session
 from .models import Company, Posting
 from .schemas import (
     CompanySuggestionOut,
+    CompetencyCoverageOut,
     ConstraintsIn,
     ConstraintsOut,
     CorpusOut,
@@ -36,6 +37,10 @@ from .schemas import (
     FactOut,
     MajorOptionsOut,
     OnboardingOut,
+    SourceRelianceOut,
+    StoryBankOut,
+    StoryIn,
+    StoryOut,
     StudentProfileIn,
     StudentProfileOut,
     TargetCompanyOut,
@@ -141,6 +146,108 @@ def create_facts(payload: list[FactIn], session: Session = Depends(get_session))
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     _committed(session)
     return [FactOut.model_validate(f) for f in facts]
+
+
+# --------------------------------------------------------------------------
+# Stories
+# --------------------------------------------------------------------------
+
+
+def _story_input(payload: StoryIn) -> corpus_service.StoryInput:
+    return corpus_service.StoryInput(
+        title=payload.title,
+        situation=payload.situation,
+        task=payload.task,
+        action=payload.action,
+        result=payload.result,
+        source_fact_ids=payload.source_fact_ids,
+        competency_tags=payload.competency_tags,
+    )
+
+
+def _story_out(story) -> StoryOut:
+    return StoryOut(
+        id=story.id,
+        title=story.title,
+        situation=story.situation,
+        task=story.task,
+        action=story.action,
+        result=story.result,
+        source_fact_ids=story.source_fact_ids or [],
+        competency_tags=story.competency_tags or [],
+        is_grounded=story.is_grounded,
+        created_at=story.created_at,
+        updated_at=story.updated_at,
+    )
+
+
+@router.get("/corpus/stories", response_model=StoryBankOut)
+def get_stories(session: Session = Depends(get_session)) -> StoryBankOut:
+    """The story bank, plus which competencies have nothing covering them.
+
+    The gaps are the point. A behavioral loop asks a handful of things in a
+    hundred phrasings, so "no story tagged conflict" is a finite, fixable hole
+    rather than a vague feeling of being underprepared.
+    """
+    report = corpus_service.story_coverage(session)
+    return StoryBankOut(
+        stories=[_story_out(s) for s in corpus_service.list_stories(session)],
+        story_count=report.story_count,
+        verified_count=report.verified_count,
+        note=report.note(),
+        competencies=[
+            CompetencyCoverageOut(
+                slug=c.slug,
+                prompt=c.prompt,
+                story_count=c.story_count,
+                story_titles=c.story_titles,
+            )
+            for c in report.competencies
+        ],
+        reliance=[
+            SourceRelianceOut(
+                fact_id=r.fact_id, fact_title=r.fact_title, story_count=r.story_count
+            )
+            for r in report.reliance
+        ],
+    )
+
+
+@router.post("/corpus/stories", response_model=StoryOut, status_code=201)
+def create_story(payload: StoryIn, session: Session = Depends(get_session)) -> StoryOut:
+    try:
+        story = corpus_service.add_story(session, _story_input(payload))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return _story_out(story)
+
+
+@router.patch("/corpus/stories/{story_id}", response_model=StoryOut)
+def edit_story(
+    story_id: UUID, payload: StoryIn, session: Session = Depends(get_session)
+) -> StoryOut:
+    try:
+        story = corpus_service.update_story(session, story_id, _story_input(payload))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if story is None:
+        raise HTTPException(status_code=404, detail="Story not found")
+    session.commit()
+    return _story_out(story)
+
+
+@router.delete("/corpus/stories/{story_id}", status_code=204)
+def remove_story(story_id: UUID, session: Session = Depends(get_session)) -> None:
+    if not corpus_service.delete_story(session, story_id):
+        raise HTTPException(status_code=404, detail="Story not found")
+    session.commit()
+
+
+@router.get("/corpus/competencies", response_model=list[dict])
+def list_competencies() -> list[dict]:
+    """The competency vocabulary, so the client does not hard-code its own."""
+    return [{"slug": slug, "prompt": prompt} for slug, prompt in corpus_service.COMPETENCIES]
 
 
 @router.post("/corpus/extract", response_model=ExtractionOut)

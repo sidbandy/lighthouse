@@ -29,8 +29,24 @@ export function PostingCard({
           </div>
           <div className="text-xs text-navy-500 truncate">{posting.company_name}</div>
         </div>
-        {!posting.is_active && (
-          <span className="text-2xs font-600 uppercase tracking-wide text-bad shrink-0">closed</span>
+        {/* Already on the board is the first thing worth knowing about a row —
+            it changes whether you read the rest of the card at all. */}
+        {posting.tracked ? (
+          <span
+            className={`text-2xs font-600 shrink-0 ${
+              posting.tracked.is_terminal ? "text-navy-400" : "text-good"
+            }`}
+            title={posting.tracked.silence_note ?? "Already on your board"}
+          >
+            {posting.tracked.is_terminal ? "" : "✓ "}
+            {posting.tracked.stage_label}
+          </span>
+        ) : (
+          !posting.is_active && (
+            <span className="text-2xs font-600 uppercase tracking-wide text-bad shrink-0">
+              closed
+            </span>
+          )
         )}
       </div>
 

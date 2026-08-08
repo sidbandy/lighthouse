@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..core.models import CorpusFact, Posting
-from ..core.textanalysis import is_technical, profile
+from ..core.textanalysis import display_form, is_technical, profile
 from .match import CORE_THRESHOLD, carries_signal
 
 # The market index is built from postings carrying a description. Below this
@@ -72,7 +72,7 @@ class MarketIndex:
         for term, postings in self.postings_by_term.items():
             self._demand[term] = TermDemand(
                 term=term,
-                display=surfaces.get(term, term),
+                display=surfaces.get(term) or display_form(term),
                 posting_count=len(postings),
                 core_count=core_hits.get(term, 0),
                 is_technical=is_technical(term),
@@ -92,8 +92,9 @@ class MarketIndex:
             reached |= self.postings_by_term.get(term, set())
         return reached
 
-    def in_demand(self, limit: int = 60, *, skills_only: bool = True) -> list[TermDemand]:
-        """The most widely demanded terms, most postings first.
+    def in_demand(self, limit: int | None = 60, *, skills_only: bool = True) -> list[TermDemand]:
+        """The most widely demanded terms, most postings first. ``limit=None``
+        returns the whole ranking.
 
         ``skills_only`` restricts this to recognised skill vocabulary. A general
         word repeated within one posting is signal about that role, but across a
@@ -101,7 +102,8 @@ class MarketIndex:
         "technology" -- nothing anyone can act on.
         """
         candidates = [d for d in self._demand.values() if d.is_technical or not skills_only]
-        return sorted(candidates, key=lambda d: (-d.posting_count, -d.core_count, d.term))[:limit]
+        ranked = sorted(candidates, key=lambda d: (-d.posting_count, -d.core_count, d.term))
+        return ranked if limit is None else ranked[:limit]
 
 
 @dataclass(slots=True)
@@ -206,7 +208,12 @@ def analyse(facts: list[CorpusFact], market: MarketIndex, *, gap_limit: int = 25
     contributions.sort(key=lambda c: (-c.reach, -c.unique_reach, c.title))
 
     evidenced: set[str] = set().union(*terms_by_fact.values()) if terms_by_fact else set()
-    gaps = [d for d in market.in_demand(limit=gap_limit * 6) if d.term not in evidenced][:gap_limit]
+    # Filter first, then take. Drawing a fixed window and filtering inside it
+    # starves the list exactly when the corpus is good: a corpus evidencing most
+    # of the top terms would return a handful of gaps while real ones sat just
+    # below the window. The full ranking is a few thousand entries and already
+    # in memory, so ranking it whole costs nothing worth saving.
+    gaps = [d for d in market.in_demand(limit=None) if d.term not in evidenced][:gap_limit]
 
     all_reached: set[int] = set()
     for reached in reach_by_fact.values():

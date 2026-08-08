@@ -8,7 +8,7 @@ and each fact carries the sentence it came from so a bad parse is visible.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 # --------------------------------------------------------------------------
 # Money
@@ -49,9 +49,16 @@ _UNIT_LABEL: tuple[tuple[re.Pattern[str], str], ...] = (
 # Everything else worth pulling out
 # --------------------------------------------------------------------------
 
+# "3.0 GPA", "GPA of 3.5", "a minimum cumulative average of 3.2", and the
+# trailing forms -- "3.0 or above", "3.5 and higher" -- which are common enough
+# that missing them loses a real knockout.
 _GPA_RE = re.compile(
     r"\b(?:minimum\s+|min\.?\s+|at least\s+|a\s+)?"
-    r"(?:gpa\s*(?:of|:)?\s*(\d\.\d{1,2})|(\d\.\d{1,2})\s*(?:\+\s*)?gpa)",
+    r"(?:(?:cumulative\s+|overall\s+)?(?:gpa|grade\s+point\s+average|average)"
+    r"\s*(?:of|:|is|above|at\s+least)?\s*(\d\.\d{1,2})"
+    r"|(\d\.\d{1,2})\s*(?:\+|/\s*4(?:\.0)?)?\s*"
+    r"(?:or\s+(?:above|higher|better)|and\s+(?:above|higher))?\s*"
+    r"(?:cumulative\s+)?(?:gpa|grade\s+point\s+average))",
     re.I,
 )
 
@@ -62,10 +69,19 @@ _DURATION_RE = re.compile(
     re.I,
 )
 
+# Every branch requires application context. A bare "deadline" must not match:
+# "thrives under tight deadlines" is a soft-skills bullet on a large minority of
+# postings, and reporting it as this posting's closing date is worse than
+# reporting no date at all.
 _DEADLINE_RE = re.compile(
-    r"\b(?:appl(?:y|ications?)\s+(?:by|before|close[sd]?|deadline|due)|"
-    r"deadline\s*(?:is|:)?|closes?\s+on|last\s+day\s+to\s+apply)"
-    r"[^.\n]{0,60}",
+    r"\b(?:"
+    r"appl(?:y|ication|ications)\s+(?:by|before|due|close[sd]?|closing|"
+    r"will\s+close|must\s+be\s+(?:submitted|received))"
+    r"|(?:application|submission|priority|early)\s+deadlines?\s*(?:is|are|:)?"
+    r"|deadlines?\s+(?:to|for)\s+appl(?:y|ying|ication|ications)"
+    r"|last\s+day\s+to\s+apply"
+    r"|accepting\s+applications\s+(?:until|through)"
+    r")[^.\n]{0,60}",
     re.I,
 )
 
@@ -232,10 +248,19 @@ def extract_compensation(sentences: list[str]) -> Fact | None:
 
 
 def extract_gpa(sentences: list[str]) -> Fact | None:
+    """The stated GPA floor, on the 4.0 scale the eligibility check assumes.
+
+    Postings from other systems quote other scales -- "a current GPA of 8.00" is
+    a 10-point scale, and rendering it as a GPA requirement beside US postings
+    invites exactly the wrong conclusion. Out-of-scale figures are dropped
+    rather than converted, because the posting never said which scale it meant.
+    """
     for sentence in sentences:
         match = _GPA_RE.search(sentence)
         if match:
             value = match.group(1) or match.group(2)
+            if not 1.0 <= float(value) <= 4.0:
+                continue
             return Fact("gpa", "GPA requirement", value, _quote(sentence))
     return None
 
@@ -324,16 +349,58 @@ def extract_responsibilities(sentences: list[str], limit: int = 6) -> list[str]:
     return picked
 
 
+# Weeks in a year, for prorating an annualised figure over a stated internship
+# length. Deliberately the naive number: the point is a rough second reading of
+# a real quoted figure, not a payroll calculation.
+_WEEKS_PER_YEAR = 52
+
+
+def _prorated(compensation: Fact, duration: Fact) -> Fact:
+    """Add "~$48k over 10 weeks" beside an annualised figure.
+
+    Quant firms quote interns an annualised base -- "Base Salary: $250,000" for
+    a ten-week internship -- which the brief reports verbatim and correctly, and
+    which reads as absurd. The stated figure is never replaced: this adds a
+    second reading of the same real number, and only when the posting itself
+    supplied both halves.
+    """
+    if "per year" not in compensation.value:
+        return compensation
+    weeks_match = re.match(r"(\d+)\s+weeks?", duration.value)
+    if not weeks_match:
+        return compensation
+
+    weeks = int(weeks_match.group(1))
+    if not 1 <= weeks < _WEEKS_PER_YEAR:
+        return compensation
+
+    amount = re.search(r"\$([\d,]+(?:\.\d+)?)", compensation.value)
+    if not amount:
+        return compensation
+    annual = float(amount.group(1).replace(",", ""))
+    over_term = annual * weeks / _WEEKS_PER_YEAR
+    rendered = f"${over_term / 1000:.0f}k" if over_term >= 1000 else f"${over_term:.0f}"
+    return replace(
+        compensation,
+        value=f"{compensation.value} · ~{rendered} over {weeks} weeks",
+    )
+
+
 def build(description: str | None) -> PostingBrief:
     """Read one description into a brief. Empty in, empty out."""
     if not description or not description.strip():
         return PostingBrief()
 
     sentences = _sentences(description)
+    compensation = extract_compensation(sentences)
+    duration = extract_duration(sentences)
+    if compensation and duration:
+        compensation = _prorated(compensation, duration)
+
     return PostingBrief(
-        compensation=extract_compensation(sentences),
+        compensation=compensation,
         gpa=extract_gpa(sentences),
-        duration=extract_duration(sentences),
+        duration=duration,
         deadline=extract_deadline(sentences),
         arrangement=extract_arrangement(sentences),
         process=extract_process(sentences),

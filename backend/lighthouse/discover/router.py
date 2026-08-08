@@ -10,10 +10,36 @@ from sqlalchemy.orm import Session
 
 from ..core.db import get_session
 from ..core.models import EmploymentType, RoleFamily, Season, Sponsorship
+from ..track import applications as track_applications
+from ..track.schemas import TrackedStateOut
 from . import ranking, service
-from .schemas import CycleCount, LaneBucketOut, PostingDetail, PostingPage, SourceHealthOut
+from .schemas import (
+    CycleCount,
+    LaneBucketOut,
+    PostingDetail,
+    PostingPage,
+    PostingSummary,
+    SourceHealthOut,
+)
 
 router = APIRouter(prefix="/api", tags=["discover"])
+
+
+def _attach_tracked(session: Session, items: list[PostingSummary]) -> None:
+    """Mark whichever of ``items`` are already on the board.
+
+    Done here rather than in the service so Discover's query layer stays unaware
+    of Track. Two extra queries for the whole page, however long it is.
+    """
+    if not items:
+        return
+    states = track_applications.states_for_postings(session, [item.id for item in items])
+    if not states:
+        return
+    for item in items:
+        state = states.get(item.id)
+        if state is not None:
+            item.tracked = TrackedStateOut.from_state(state)
 
 
 @router.get("/postings", response_model=PostingPage)
@@ -63,6 +89,7 @@ def list_postings(
         offset=offset,
     )
     items, total = service.list_postings(session, filters, today)
+    _attach_tracked(session, items)
     return PostingPage(items=items, total=total, limit=limit, offset=offset)
 
 
@@ -70,9 +97,13 @@ def list_postings(
 def discover(
     session: Session = Depends(get_session),
     season: list[Season] = Query(default=[]),
+    employment_type: list[EmploymentType] = Query(default=[]),
     role_family: list[RoleFamily] = Query(default=[]),
     sponsorship: list[Sponsorship] = Query(default=[]),
-    state: list[str] = Query(default=[]),
+    state: list[str] = Query(default=[], description="Two-letter state codes, e.g. TX"),
+    search: str | None = None,
+    remote_only: bool = False,
+    posted_within_days: int | None = Query(default=None, ge=1, le=365),
     with_description_only: bool = Query(
         default=False,
         description="Only postings carrying a description, so match scores rest on real evidence.",
@@ -87,13 +118,19 @@ def discover(
     """
     filters = service.PostingFilters(
         seasons=season,
+        employment_types=[e.value for e in employment_type],
         role_families=[r.value for r in role_family],
         sponsorship=[s.value for s in sponsorship],
         states=state,
+        search=search,
+        remote_only=remote_only,
+        posted_within_days=posted_within_days,
         with_description_only=with_description_only,
     )
     buckets = ranking.three_lane_view(session, filters, per_lane=per_lane, today=today)
-    return ranking.lane_view_to_out(buckets)
+    out = ranking.lane_view_to_out(buckets)
+    _attach_tracked(session, [p for bucket in out for p in bucket.postings])
+    return out
 
 
 @router.get("/postings/{posting_id}", response_model=PostingDetail)
@@ -101,6 +138,7 @@ def get_posting(posting_id: UUID, session: Session = Depends(get_session)) -> Po
     posting = service.get_posting(session, posting_id)
     if posting is None:
         raise HTTPException(status_code=404, detail="Posting not found")
+    _attach_tracked(session, [posting])
     return posting
 
 

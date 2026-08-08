@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
-import type { Application, ApplicationEvent, Board, Stage } from "../api/types";
+import type {
+  Application,
+  ApplicationEvent,
+  Board,
+  ResumeVersion,
+  Stage,
+} from "../api/types";
 import { atMidday, today } from "../lib/dates";
 import { FunnelPanel } from "./FunnelPanel";
 
@@ -39,43 +45,9 @@ const COLUMNS: { stage: Stage; title: string; blurb: string; rule: string }[] = 
   },
 ];
 
-// What you can log next, given where an application is. Keeping this as data
-// means the board never offers a transition that reads as nonsense — you cannot
-// log an offer on something you never applied to.
-const NEXT_EVENTS: Record<Stage, { event: ApplicationEvent; label: string }[]> = {
-  SAVED: [
-    { event: "applied", label: "Applied" },
-    { event: "withdrawn", label: "Not applying" },
-  ],
-  APPLIED: [
-    { event: "assessment_received", label: "Got an OA" },
-    { event: "interview_scheduled", label: "Interview booked" },
-    { event: "rejected", label: "Rejected" },
-    { event: "withdrawn", label: "Withdrew" },
-  ],
-  ASSESSMENT: [
-    { event: "assessment_completed", label: "OA done" },
-    { event: "interview_scheduled", label: "Interview booked" },
-    { event: "rejected", label: "Rejected" },
-  ],
-  INTERVIEW: [
-    { event: "interview_completed", label: "Interview done" },
-    { event: "final_round", label: "Final round" },
-    { event: "offer", label: "Offer" },
-    { event: "rejected", label: "Rejected" },
-  ],
-  FINAL: [
-    { event: "offer", label: "Offer" },
-    { event: "rejected", label: "Rejected" },
-  ],
-  OFFER: [
-    { event: "accepted", label: "Accepted" },
-    { event: "rejected", label: "Declined" },
-  ],
-  REJECTED: [],
-  WITHDRAWN: [],
-  ACCEPTED: [],
-};
+// What can be logged next comes from the API (`application.next_events`) rather
+// than a table here, so the board and the posting window can never drift into
+// offering different transitions for the same row.
 
 export function TrackBoard() {
   const [board, setBoard] = useState<Board | null>(null);
@@ -119,6 +91,21 @@ export function TrackBoard() {
     }
   };
 
+  const patch = async (
+    id: string,
+    changes: { notes?: string; resume_version_id?: string; clear_resume_version?: boolean },
+  ) => {
+    setBusyId(id);
+    try {
+      await api.patchApplication(id, changes);
+      await load();
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   if (loading) return <CenteredNote>Loading your board…</CenteredNote>;
   if (error && !board)
     return (
@@ -157,6 +144,26 @@ export function TrackBoard() {
         <>
           <FunnelPanel funnel={board.funnel} />
 
+          {board.version_outcomes.some((v) => v.applied > 0) && (
+            <section className="card p-4">
+              <h2 className="rule-label mb-2">Résumé versions</h2>
+              <div className="space-y-1">
+                {board.version_outcomes.map((v) => (
+                  <p key={v.version_id} className="text-xs text-navy-600">
+                    <span className="font-600 text-navy-800">{v.label}</span>
+                    <span className="text-navy-400"> — </span>
+                    <span className="tabular-nums">{v.statement}</span>
+                  </p>
+                ))}
+              </div>
+              <p className="text-2xs text-navy-400 mt-2 leading-relaxed">
+                Counts, not rates. A response rate over a handful of applications would move
+                twenty points on one reply — compare these once each version has real volume
+                behind it.
+              </p>
+            </section>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {COLUMNS.map((col) => {
               const items = live.filter((a) => a.stage === col.stage);
@@ -180,9 +187,11 @@ export function TrackBoard() {
                         <ApplicationCard
                           key={a.id}
                           application={a}
+                          versions={board.resume_versions}
                           busy={busyId === a.id}
                           onLog={log}
                           onUntrack={untrack}
+                          onPatch={patch}
                         />
                       ))
                     )}
@@ -200,9 +209,11 @@ export function TrackBoard() {
                   <ApplicationCard
                     key={a.id}
                     application={a}
+                    versions={board.resume_versions}
                     busy={busyId === a.id}
                     onLog={log}
                     onUntrack={untrack}
+                    onPatch={patch}
                   />
                 ))}
               </div>
@@ -216,14 +227,21 @@ export function TrackBoard() {
 
 function ApplicationCard({
   application,
+  versions,
   busy,
   onLog,
   onUntrack,
+  onPatch,
 }: {
   application: Application;
+  versions: ResumeVersion[];
   busy: boolean;
   onLog: (id: string, event: ApplicationEvent, on: string) => void;
   onUntrack: (id: string) => void;
+  onPatch: (
+    id: string,
+    changes: { notes?: string; resume_version_id?: string; clear_resume_version?: boolean },
+  ) => void;
 }) {
   const [open, setOpen] = useState(false);
   // Stage buttons log against this date, not against "now". Back-filling a
@@ -231,7 +249,7 @@ function ApplicationCard({
   // stamping it all with today would make every wait-time figure downstream
   // wrong -- which is most of what the funnel is for.
   const [on, setOn] = useState(today());
-  const next = NEXT_EVENTS[application.stage];
+  const next = application.next_events;
 
   return (
     <div className={`card p-3 ${application.is_terminal ? "opacity-60" : ""}`}>
@@ -278,6 +296,40 @@ function ApplicationCard({
               {entry.note && <span className="text-navy-400 italic truncate">{entry.note}</span>}
             </li>
           ))}
+          {/* Which résumé went out. Without it the funnel can only say how the
+              pile did, not whether the rewrite changed anything. */}
+          {versions.length > 0 && (
+            <li className="pt-1">
+              <select
+                value={application.resume_version_id ?? ""}
+                disabled={busy}
+                onChange={(e) =>
+                  onPatch(
+                    application.id,
+                    e.target.value
+                      ? { resume_version_id: e.target.value }
+                      : { clear_resume_version: true },
+                  )
+                }
+                className="text-2xs bg-white border border-navy-200 rounded px-1.5 py-0.5 w-full
+                           text-navy-700 hover:border-navy-300 focus:border-beacon-500 outline-none"
+              >
+                <option value="">résumé not recorded</option>
+                {versions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+            </li>
+          )}
+          <li className="pt-1">
+            <NotesField
+              value={application.notes ?? ""}
+              disabled={busy}
+              onCommit={(notes) => onPatch(application.id, { notes })}
+            />
+          </li>
           <li>
             <button
               onClick={() => onUntrack(application.id)}
@@ -308,11 +360,11 @@ function ApplicationCard({
           <div className="flex flex-wrap gap-1">
           {next.map((n) => (
             <button
-              key={n.event}
-              onClick={() => onLog(application.id, n.event, on)}
+              key={n.event_type}
+              onClick={() => onLog(application.id, n.event_type, on)}
               disabled={busy}
               className={`text-2xs px-1.5 py-0.5 rounded transition-colors disabled:opacity-40 ${
-                n.event === "rejected" || n.event === "withdrawn"
+                n.is_setback
                   ? "text-navy-400 hover:text-bad hover:bg-bad/5"
                   : "text-navy-600 hover:text-beacon-700 hover:bg-beacon-glow"
               }`}
@@ -324,6 +376,33 @@ function ApplicationCard({
         </div>
       )}
     </div>
+  );
+}
+
+/** Commits on blur rather than per keystroke: every save refetches the board. */
+function NotesField({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: string;
+  disabled: boolean;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <textarea
+      value={draft}
+      disabled={disabled}
+      rows={2}
+      placeholder="Notes — who referred you, what they said, anything you'd forget"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => draft !== value && onCommit(draft)}
+      className="text-2xs bg-white border border-navy-200 rounded px-1.5 py-1 w-full resize-y
+                 text-navy-700 placeholder:text-navy-300 hover:border-navy-300
+                 focus:border-beacon-500 outline-none"
+    />
   );
 }
 

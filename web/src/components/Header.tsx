@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import type { CycleCount, SourceHealth } from "../api/types";
 import { RefreshButton } from "./RefreshButton";
@@ -19,19 +20,19 @@ function Beacon() {
   );
 }
 
-export type View = "discover" | "track" | "corpus" | "resume";
+const NAV: { to: string; label: string }[] = [
+  { to: "/discover", label: "Discover" },
+  { to: "/applications", label: "Applications" },
+  { to: "/corpus", label: "My corpus" },
+  { to: "/resume", label: "Résumé check" },
+];
 
-export function Header({
-  view,
-  onView,
-  onRefreshed,
-}: {
-  view: View;
-  onView: (v: View) => void;
-  onRefreshed?: () => void;
-}) {
+export function Header({ onRefreshed }: { onRefreshed?: () => void }) {
   const [cycles, setCycles] = useState<CycleCount[]>([]);
   const [health, setHealth] = useState<SourceHealth[]>([]);
+  // Cycle counts and the refresh control answer "is there anything worth
+  // applying to right now?", which is only a question on Discover.
+  const onDiscover = useLocation().pathname.startsWith("/discover");
 
   useEffect(() => {
     api.cycles().then(setCycles).catch(() => {});
@@ -56,22 +57,25 @@ export function Header({
         </div>
 
         <nav className="flex items-center gap-1">
-          <NavItem active={view === "discover"} onClick={() => onView("discover")}>
-            Discover
-          </NavItem>
-          <NavItem active={view === "track"} onClick={() => onView("track")}>
-            Applications
-          </NavItem>
-          <NavItem active={view === "corpus"} onClick={() => onView("corpus")}>
-            My corpus
-          </NavItem>
-          <NavItem active={view === "resume"} onClick={() => onView("resume")}>
-            Résumé check
-          </NavItem>
+          {NAV.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `px-3 py-1.5 rounded-lg text-sm font-500 transition-colors ${
+                  isActive
+                    ? "bg-white/[0.12] text-white"
+                    : "text-navy-300 hover:text-white hover:bg-white/[0.06]"
+                }`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
         </nav>
 
         <div className="flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          {view === "discover" &&
+          {onDiscover &&
             cycles.map((c) => (
             <div
               key={c.term_label}
@@ -85,7 +89,7 @@ export function Header({
           ))}
         </div>
 
-        {view === "discover" && <RefreshButton onFinished={onRefreshed ?? (() => {})} />}
+        {onDiscover && <RefreshButton onFinished={onRefreshed ?? (() => {})} />}
 
         <div
           className="flex items-center gap-1.5 text-2xs text-navy-300 shrink-0"
@@ -104,23 +108,3 @@ export function Header({
   );
 }
 
-function NavItem({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 rounded-lg text-sm font-500 transition-colors ${
-        active ? "bg-white/[0.12] text-white" : "text-navy-300 hover:text-white hover:bg-white/[0.06]"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}

@@ -35,75 +35,31 @@ from scratch later.
 
 ## Entity resolution
 
-### `D. E. Shaw` misses its selectivity tier — `misleading`
-
-`canonical_company("D. E. Shaw")` returns `d e shaw` (single letters split on
-the periods), but `SEED_TIERS` in `discover/lanes.py` keys on `de shaw`. The
-lookup misses, selectivity falls back to the mid default of 2, and an elite
-quant firm can land in the Target lane labelled "a realistic match at a
-realistic bar" — the exact failure mode the tier/target split was built to
-prevent.
-
-**Fix:** either add `"d e shaw"` as a second key in `SEED_TIERS`, or collapse
-runs of single letters in `canonical_company` (`d e shaw` → `de shaw`). The
-second is more general and would also catch `J. P. Morgan`, but it risks
-merging genuinely distinct short names, so the first is the safe move.
-
-### `IMC` and `IMC Trading` are two company rows — `incomplete`
-
-Dedup blocks on `canonical_name`, and neither string is reachable from the other
-by the current normalisation. Postings split across both rows, so "seen on N
-lists" undercounts and either row can miss a seed tier.
-
-This is a *conscious* trade — `models.py` says it would rather keep two rows
-than wrongly merge two real companies — so it is not a bug so much as a known
-cost. **Fix, when it starts to bite:** a small alias table mapping known
-variants to one canonical name, populated by hand for the companies that
-actually matter. Do not attempt fuzzy company merging; that is how "Meta" and
-"Meta Materials" become one row.
-
-### Selectivity seed coverage is thin — `misleading`
+### Selectivity seed coverage is thin, and Safety is empty because of it — `misleading`
 
 `SEED_TIERS` is ~40 hand-maintained entries. Genuinely elite firms outside it
 (Five Rings Capital, Radix, most of consulting and banking) get the mid default
 and can appear in Target. Verified live: Five Rings Capital sits in Target at
 selectivity 2.
 
-**Fix:** a pass with a real list once the Companies module exists. The table is
-deliberately small and legible rather than exhaustive, so this is expansion, not
-redesign. It belongs with Company Intelligence, which will have the data.
+Worse than the entry originally recorded: **the Safety lane is structurally
+almost always empty.** `assign_lane` requires `selectivity <= 1` for Safety, and
+only five companies in the seed table sit at that tier (ibm, oracle, cisco,
+dell, accenture). Verified live at the page size the UI actually requests
+(`per_lane=20`): Reach 20, Target 19, Safety 0. The three-lane view is the
+headline Discover surface and it is currently running on two lanes.
 
----
-
-## Vocabulary and text analysis
-
-### Terms always render lowercase — `cosmetic`
-
-`tokenize_with_surface` lowercases before tokenising, so the surface form keeps
-inflection but never capitalisation. The UI shows "kubernetes", "aws", "c++"
-where a human would write "Kubernetes", "AWS", "C++".
-
-**Fix:** a display-casing map over the curated vocabulary (`{"aws": "AWS",
-"kubernetes": "Kubernetes", …}`), consulted only at render time in
-`TermProfile.display`. Do not change the tokeniser — the lowercase stem is the
-correct comparison key and changing it would break every count.
+**Fix:** a real selectivity pass once Company Intelligence exists — it will have
+H1B filing volumes, posting counts and process data, all of which bear on how
+hard a company is to get into. The lane thresholds themselves are *not* the
+problem and should not be tuned first: the logic is legible and correct, it is
+being fed a table with almost nothing at the accessible end. Do not tune against
+the current corpus either, which is still a stranger's (see below) — that would
+be fitting to noise.
 
 ---
 
 ## Corpus coverage
-
-### The gap list can starve — `incomplete`
-
-`coverage.analyse` draws candidates from `in_demand(limit=gap_limit * 6)` and
-then filters out everything the corpus already evidences. A well-covered corpus
-that evidences more than five-sixths of the top terms returns fewer gaps than
-asked for, while real gaps sit just below the window.
-
-The 6× multiplier is a cost guard, not a considered limit.
-
-**Fix:** widen the window until `gap_limit` survivors are found, or filter first
-and take `gap_limit` from the full ranking. The full ranking is a few thousand
-entries and already in memory, so the second is cheap and simply correct.
 
 ### "Reach" is a deliberately weak bar — `misleading`
 
@@ -132,47 +88,6 @@ when the cost is paid.
 
 ## Track: applications
 
-### Deleted applications leave their events behind — `incomplete`
-
-`events` has no foreign key to `applications` — deliberately, since the log is
-append-only and must outlive the entities it describes. But `DELETE
-/api/applications/{id}` removes the application row and leaves its events
-orphaned. Verified live: 15 application events against 3 applications.
-
-They are harmless today (`get_or_create` mints a fresh id, so old events can
-never re-attach to a new application for the same posting) but they accumulate
-and will skew any future "how much have I logged" statistic.
-
-**Fix:** either delete the matching events in the untrack endpoint — acceptable,
-since untracking means "this was a mistake, forget it" — or add a
-`deleted` tombstone event and filter the log. Prefer the first; the second is
-the kind of purity that costs more than it returns for a single-user tool.
-
-### `Application.notes` and `resume_version_id` are never written — `incomplete`
-
-Both columns exist on the model and are plumbed all the way through
-`ApplicationState` and the API response, and nothing sets either. Resume-version
-tracking is a stated Track goal (HANDOFF §10) that is genuinely not built yet;
-free-text notes have no UI.
-
-**Fix:** notes need a field on the application card and a `PATCH
-/api/applications/{id}` endpoint. Resume versions need the `ResumeVersion` model
-wired to the résumé check flow first — logging *which* résumé got which outcome
-is most of the value of the funnel, so this is roadmap, not polish.
-
-### The drawer does not know a posting is already tracked — `misleading`
-
-`TrackActions` always renders "Save" and "I applied" regardless of whether the
-posting is already on the board. Clicking again is harmless — `get_or_create` is
-idempotent and returns the existing row — but the operator gets no signal that
-they already applied, which on a 200-row board is exactly the mistake they need
-protecting from.
-
-**Fix:** include the current application stage on `PostingDetail` (one join), and
-render the existing stage plus the next valid transitions instead of the save
-buttons. The same field would let Discover mark already-tracked postings, which
-is the more valuable half.
-
 ### Silence is measured in server-local days — `cosmetic`
 
 `days_silent` compares `datetime.now(UTC).date()` against the event date. Near
@@ -189,28 +104,31 @@ anyway — do both together.
 
 ### Extraction coverage is uneven by field — `incomplete`
 
-Measured over 400 real descriptions: compensation 30%, length 20%, working
-pattern 19%, interview process 10%, deadline 6%, GPA 4%, responsibilities 77%.
-The low numbers are mostly postings that genuinely say nothing (`is_thin` exists
-to surface exactly that), but deadline and GPA are also the weakest patterns.
+Re-measured over 502 real descriptions: responsibilities 79%, compensation 30%,
+working pattern 20%, length 19%, interview process 9%, deadline 6.4%, GPA 5.4%.
+The low numbers are mostly postings that genuinely say nothing — `is_thin` exists
+to surface exactly that — and deadline and GPA are now *correct* at those rates
+rather than padded with false positives.
 
-**Fix:** widen `_DEADLINE_RE` to catch bare dates near "apply" and month-name
-formats; `_GPA_RE` misses "3.0 or above" and "minimum cumulative average". Both
-are contained regex work with a 400-posting corpus already available to measure
-against — re-run the counting script in the commit for this feature.
-
-### Annualised intern salaries read as absurd — `misleading`
-
-Quant firms quote interns an annualised base ("Base Salary: $250,000") which the
-brief reports verbatim as "$250,000 per year" for a ten-week internship. The
-extraction is correct and the evidence tooltip shows the source sentence, but
-the number is easy to misread.
-
-**Fix:** when a duration is also extracted and the pay is annual, show the
-prorated figure alongside — "$250,000/yr · ~$48k over 10 weeks". Do not replace
-the stated figure; add to it.
+**Fix, if it is worth more:** `_DEADLINE_RE` still only catches phrasings that
+name an application explicitly, which is the right trade (see the "tight
+deadlines" false positive it used to produce). Interview process at 9% is the
+weakest genuinely-improvable field. Measure any change over the same 502
+descriptions before and after; do not accept a coverage gain without reading a
+sample of what it newly matched.
 
 ## Deployment
+
+### CORS only allows the Vite dev origin — `incomplete`
+
+`api.py` pins `allow_origins` to `http://localhost:5173` and its 127.0.0.1
+equivalent. Correct and tight for local development, and it will reject the
+deployed frontend the moment one exists — the failure looks like "could not
+reach the API" in the browser with the API plainly healthy, which is a
+half-hour of confusion if you have not seen it before.
+
+**Fix:** read the allowed origins from settings so the deploy can add its own,
+keeping the local defaults. Belongs with the deployment work, not before it.
 
 ### Ingest is far too slow against a remote database — `incomplete`
 

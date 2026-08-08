@@ -231,3 +231,126 @@ regardless. For local development, override `LIGHTHOUSE_DATABASE_URL`.
 - **Replace the fake corpus.** `corpus_facts` still holds 12 facts from a test
   résumé. Import a real one on the My corpus page; every match score until then
   is computed against a stranger.
+
+---
+
+# Session 3 — 7 Aug 2026
+
+## Where this session started
+
+22 commits pushed, 467 tests, four working pages. The queued next steps were
+three deployment items and one feature.
+
+## What changed, and why
+
+The session opened with an audit against the original spec rather than with
+code. Two things it found reset the plan:
+
+- **`LIGHTHOUSE_SPEC.md` did not exist** — not in the repo, not anywhere in git
+  history — despite `HANDOFF.md` citing it as the source of truth. Every session
+  since had been working from the build plan, which is a *derived* document.
+- **The build plan had silently dropped Networking.** Its §12 defers "the
+  networking/outreach module (spec §5)"; the spec has it as Phase 4 with its own
+  schema. Every doc in the repo understated the scope by a whole phase.
+
+The operator supplied the spec text, and set the priority explicitly: **parts 4
+and 5 — Networking, and Study/Practice — are the prize.** They are the biggest,
+hardest, most data-dependent work in the project and the reason a student would
+open the tool at all. Parts 1–3 get finished first because 4–6 read from all
+three, not because they matter more.
+
+Deployment work (batch ingest writes, `posting_terms`, auth) is parked until the
+product is whole. None of it changes what the product does.
+
+## What was built
+
+### Discover
+
+- **Tracked state on every posting.** `PostingSummary` carries the board stage or
+  nothing at all — "not on the board" is not a stage. Two extra queries for a
+  whole page via `states_for_postings`. The card marks it and the posting window
+  stops offering "Save" on something already applied to.
+- **The transition table moved to the server.** `NEXT_EVENTS` lived in
+  `TrackBoard.tsx`; the board and the posting window both needed it and two
+  copies drift. Now `applications.NEXT_EVENTS` and served on the response.
+- **Seven filters that already existed got exposed.** `PostingFilters` supported
+  sponsorship, states, remote, posted-within, search and employment type —
+  indexed and working — and `FilterBar` offered three of ten. `/api/discover`
+  was widened to accept them too.
+- **The eligibility check reached the UI.** The backend has computed graduation-
+  window eligibility since session 2 and nothing rendered it. Silent on
+  `not_stated`, which is most postings.
+
+### Corpus
+
+- **The story bank** — `corpus_stories` finally has a consumer. STAR fields,
+  competency tags, and the zero-fabrication trace rendered ("Built from: …").
+  Coverage is computed from tags the operator applied, never inferred from the
+  prose: guessing that a story "sounds like conflict" claims a coverage they
+  never made, and they find out in the room. Over-reliance is reported only at
+  four or more stories, because three on one project is three stories, not a
+  pattern.
+
+### Track
+
+- **Résumé versions, end to end.** Save one from the résumé check page, pick it
+  on an application, and the board reports per-version outcomes. A rejection
+  counts as a response — dropping it would flatter whichever version collected
+  the most silence. Counts only, at any sample size.
+- **Notes on applications**, via `PATCH /api/applications/{id}`. Notes and which
+  résumé went out are corrections to a record, not things that happened on a
+  date, so they are edits rather than log entries.
+
+### Frontend
+
+- **`react-router`**, at four pages rather than at twelve. The posting window has
+  its own URL and survives a reload — verified in a real browser.
+
+## Bugs found, all by running against live data
+
+| Bug | Consequence |
+|---|---|
+| `_DEADLINE_RE` matched the bare word "deadline" | "You work well under tight deadlines" was reported as the posting's closing date. Roughly half of all extracted deadlines were soft-skills bullets. Every branch now requires application context; coverage went from a padded 10.8% to a correct 6.4% |
+| `_GPA_RE` had no scale bound | "a current GPA of 8.00" — a ten-point scale — rendered as a GPA requirement beside four-point postings. Out-of-scale figures are dropped, not converted; the posting never said which scale it meant |
+| `canonical_company` split initialisms | "D. E. Shaw" → `d e shaw`, missing a tier table keyed on `de shaw`. An elite quant firm sat in Target labelled "a realistic match at a realistic bar" |
+| Suffix stripping could eat the whole name | Caught by the live run: "H&CO" → `h and` → `h`. A one-character blocking key matches everything it meets |
+| Company rows split across normalisations | Live: 7 merges — AWS/Amazon, D. E. Shaw ×2, IMC, SIG/Susquehanna, Merck, Kearney. D. E. Shaw went 1 → 16 postings, IMC Trading 34 → 40 |
+| Untrack orphaned its events | 15 application events against 3 applications. `events.discard` now removes them; untracking means "this was a mistake", not "this ended" |
+| The gap list starved | `in_demand(limit=gap_limit * 6)` filtered *inside* a fixed window, so a good corpus returned fewer gaps while real ones sat just below it |
+
+**A near miss worth recording:** the first verification pass ran against a
+leftover uvicorn on :8077 serving pre-change code, and `curl /health` answered
+`ok` the whole time. `/api/corpus/stories` returning 404 is what gave it away.
+Check that the server you are testing knows about the code you just wrote.
+
+## Decisions
+
+| Decision | Rationale |
+|---|---|
+| Parts 4 and 5 are the prize; 1–3 are the foundation | Study needs company intelligence, Practice needs real rubrics, Networking needs the corpus. Building the prize on an 80% foundation wastes it |
+| Networking is Phase 4, not deferred | The spec has it; the build plan lost it |
+| `core/llm.py` will be sized for a live mock, not one-shot extraction | Multi-turn session state retrofitted later means rewriting every caller |
+| Per-posting requirement extraction gets persisted | It is what makes "what should I study, based on where I applied" a query rather than a re-parse of every JD |
+| Deployment stays parked | None of it changes what the product does |
+
+## Current state
+
+533 tests (up from 467), ruff clean, typecheck clean, production build clean.
+All four pages driven through a real browser against live data: no console
+errors, no failed requests, deep links survive reload.
+
+The Safety lane is empty at the page size the UI requests (Reach 20, Target 19,
+Safety 0). Not a lane-logic bug — `assign_lane` requires selectivity ≤ 1 and the
+seed table has five companies at that tier. Documented in `KNOWN_GAPS.md`; the
+fix belongs with Company Intelligence, which will have real data. Tuning
+thresholds against a corpus that is still a stranger's would be fitting to noise.
+
+## What the next session should pick up
+
+1. **`core/llm.py`** — the Gemini provider layer, with a rule-based fallback on
+   every call and the grounding contract enforced centrally.
+2. **Company & job intelligence.** Cycle-open timing first: it needs no LLM and
+   no new source, just a query over `posted_at` grouped by company × term × role
+   family. Then H1B/LCA for real sponsorship and pay bands, then the reports
+   pipeline.
+3. Then Networking, then Study/Practice.

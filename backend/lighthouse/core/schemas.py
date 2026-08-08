@@ -70,6 +70,61 @@ class CorpusOut(BaseModel):
 
 
 # --------------------------------------------------------------------------
+# Stories
+# --------------------------------------------------------------------------
+
+
+class StoryIn(BaseModel):
+    """A STAR story. ``source_fact_ids`` is what makes it verifiable — a story
+    with none is stored, but flagged, and never used to ground anything."""
+
+    title: str
+    situation: str = ""
+    task: str = ""
+    action: str = ""
+    result: str = ""
+    source_fact_ids: list[UUID] = Field(default_factory=list)
+    competency_tags: list[str] = Field(default_factory=list)
+
+
+class StoryOut(StoryIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    is_grounded: bool = Field(
+        description="Backed by at least one real corpus fact. False is a state to fix, "
+        "not a failure — it usually means the fact has not been written down yet."
+    )
+    created_at: datetime
+    updated_at: datetime
+
+
+class CompetencyCoverageOut(BaseModel):
+    slug: str
+    prompt: str = Field(description="What this competency actually asks for.")
+    story_count: int
+    story_titles: list[str]
+
+
+class SourceRelianceOut(BaseModel):
+    """One fact carrying an outsized share of the story bank. An interviewer
+    hearing four answers about one project notices."""
+
+    fact_id: UUID
+    fact_title: str
+    story_count: int
+
+
+class StoryBankOut(BaseModel):
+    stories: list[StoryOut]
+    story_count: int
+    verified_count: int
+    note: str
+    competencies: list[CompetencyCoverageOut]
+    reliance: list[SourceRelianceOut]
+
+
+# --------------------------------------------------------------------------
 # Corpus coverage against the live market
 # --------------------------------------------------------------------------
 

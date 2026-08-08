@@ -47,6 +47,28 @@ export interface PostingSummary {
   age_days: number | null;
   source_ids: string[];
   source_count: number;
+  /** Where this posting already sits on your board. Null when untracked. */
+  tracked: TrackedState | null;
+}
+
+/** A stage change that can honestly be logged from where a row is now. Served
+ *  by the API so the board and the posting window never disagree. */
+export interface Transition {
+  event_type: ApplicationEvent;
+  label: string;
+  is_setback: boolean;
+}
+
+export interface TrackedState {
+  application_id: string;
+  stage: Stage;
+  stage_label: string;
+  is_live: boolean;
+  is_terminal: boolean;
+  applied_at: string | null;
+  days_silent: number | null;
+  silence_note: string | null;
+  next_events: Transition[];
 }
 
 export interface TermMatch {
@@ -121,9 +143,21 @@ export interface PostingBrief {
   is_thin: boolean;
 }
 
+/** Whether your graduation term clears this posting's stated window.
+ *  `not_stated` is the honest and most common answer and is never dressed up
+ *  as either of the other two. */
+export interface Eligibility {
+  verdict: "eligible" | "not_eligible" | "not_stated";
+  headline: string;
+  detail: string;
+  evidence: string | null;
+  is_blocking: boolean;
+}
+
 export interface PostingDetail extends PostingSummary {
   description: string | null;
   brief: PostingBrief | null;
+  eligibility: Eligibility | null;
   match: Match | null;
   ghost: GhostAssessment | null;
   ats_vendor: string | null;
@@ -264,6 +298,53 @@ export interface Corpus {
   summary: CorpusSummary;
 }
 
+// --- Corpus: stories ---
+
+export interface StoryInput {
+  title: string;
+  situation?: string;
+  task?: string;
+  action?: string;
+  result?: string;
+  /** What makes a story verifiable. Empty means unverified, not invalid. */
+  source_fact_ids?: string[];
+  competency_tags?: string[];
+}
+
+export interface Story extends Required<StoryInput> {
+  id: string;
+  is_grounded: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Competency {
+  slug: string;
+  /** What this competency actually asks for, in plain words. */
+  prompt: string;
+}
+
+export interface CompetencyCoverage extends Competency {
+  story_count: number;
+  story_titles: string[];
+}
+
+/** One fact carrying an outsized share of the story bank. */
+export interface SourceReliance {
+  fact_id: string;
+  fact_title: string;
+  story_count: number;
+}
+
+export interface StoryBank {
+  stories: Story[];
+  story_count: number;
+  verified_count: number;
+  note: string;
+  competencies: CompetencyCoverage[];
+  reliance: SourceReliance[];
+}
+
 /** Observed demand for one term across the sampled postings. Counts, not scores. */
 export interface TermDemand {
   term: string;
@@ -363,9 +444,13 @@ export interface CompanySuggestion {
 
 export interface DiscoverParams {
   season?: Season[];
+  employment_type?: EmploymentType[];
   role_family?: RoleFamily[];
   sponsorship?: Sponsorship[];
   state?: string[];
+  search?: string;
+  remote_only?: boolean;
+  posted_within_days?: number;
   with_description_only?: boolean;
   per_lane?: number;
 }
@@ -420,9 +505,12 @@ export interface Application {
   is_terminal: boolean;
   timeline: StageEntry[];
   notes: string | null;
+  /** Which résumé went out. Null until set — the funnel cannot compare versions without it. */
+  resume_version_id: string | null;
   /** Days since the last employer signal. A real subtraction, not a ghosting probability. */
   days_silent: number | null;
   silence_note: string | null;
+  next_events: Transition[];
 }
 
 export interface StageCount {
@@ -459,9 +547,30 @@ export interface Funnel {
   waits: WaitTime[];
 }
 
+/** A résumé the operator wrote. Lighthouse tracks and scores; it never
+ *  generates one. */
+export interface ResumeVersion {
+  id: string;
+  label: string;
+  notes: string | null;
+  created_at: string;
+}
+
+/** What happened to the applications that used one version. Counts only — a
+ *  response rate over four applications is noise wearing a percent sign. */
+export interface VersionOutcome {
+  version_id: string;
+  label: string;
+  applied: number;
+  responded: number;
+  statement: string;
+}
+
 export interface Board {
   applications: Application[];
   funnel: Funnel;
+  resume_versions: ResumeVersion[];
+  version_outcomes: VersionOutcome[];
 }
 
 /** Background ingest state, polled by the refresh control. */

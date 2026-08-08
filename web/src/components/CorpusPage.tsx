@@ -14,6 +14,7 @@ import { FactEditor } from "./FactEditor";
 import { FactList } from "./FactList";
 import { ResumeImport } from "./ResumeImport";
 import { SetupPanel } from "./SetupPanel";
+import { StoryBank } from "./StoryBank";
 
 // The corpus page: the operator's own facts, and the setup that makes the rest
 // of Lighthouse personal. Match scoring, the résumé tailor and (later) story
@@ -244,14 +245,17 @@ export function CorpusPage() {
           </p>
         </CenteredNote>
       ) : (
-        <FactList
-          facts={corpus.facts}
-          contributions={contributions}
-          sampleSize={coverage.sample_size}
-          onUpdate={update}
-          onDelete={remove}
-          busyId={busyId}
-        />
+        <>
+          <FactList
+            facts={corpus.facts}
+            contributions={contributions}
+            sampleSize={coverage.sample_size}
+            onUpdate={update}
+            onDelete={remove}
+            busyId={busyId}
+          />
+          <StoryBank facts={corpus.facts} />
+        </>
       )}
     </div>
   );

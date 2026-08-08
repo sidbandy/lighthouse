@@ -442,7 +442,7 @@ class TermProfile:
 
     def display(self, term: str) -> str:
         """The human-readable form of a term."""
-        return self.surface.get(term, term)
+        return display_form(self.surface.get(term, term))
 
     def most_common(self, n: int = 20) -> list[tuple[str, int]]:
         return self.counts.most_common(n)
@@ -454,6 +454,116 @@ class TermProfile:
         this is the signal the keyword tailor is built on.
         """
         return [(t, c) for t, c in self.counts.most_common() if c >= threshold]
+
+
+# Names the tokeniser cannot recover, because it lowercases before it stems and
+# the lowercase stem is the correct comparison key. Consulted at render time
+# only -- changing the tokeniser to preserve case would break every count.
+_DISPLAY_CASE: dict[str, str] = {
+    "aws": "AWS",
+    "gcp": "GCP",
+    "sql": "SQL",
+    "nosql": "NoSQL",
+    "html": "HTML",
+    "css": "CSS",
+    "api": "API",
+    "apis": "APIs",
+    "rest": "REST",
+    "grpc": "gRPC",
+    "graphql": "GraphQL",
+    "json": "JSON",
+    "yaml": "YAML",
+    "etl": "ETL",
+    "ci": "CI",
+    "cd": "CD",
+    "ml": "ML",
+    "ai": "AI",
+    "nlp": "NLP",
+    "llm": "LLM",
+    "llms": "LLMs",
+    "gpu": "GPU",
+    "cpu": "CPU",
+    "ios": "iOS",
+    "macos": "macOS",
+    "postgresql": "PostgreSQL",
+    "postgres": "PostgreSQL",
+    "mysql": "MySQL",
+    "mongodb": "MongoDB",
+    "redis": "Redis",
+    "kafka": "Kafka",
+    "kubernetes": "Kubernetes",
+    "docker": "Docker",
+    "terraform": "Terraform",
+    "linux": "Linux",
+    "unix": "Unix",
+    "git": "Git",
+    "github": "GitHub",
+    "gitlab": "GitLab",
+    "javascript": "JavaScript",
+    "typescript": "TypeScript",
+    "python": "Python",
+    "java": "Java",
+    "golang": "Go",
+    "c++": "C++",
+    "c#": "C#",
+    ".net": ".NET",
+    "php": "PHP",
+    "ruby": "Ruby",
+    "rust": "Rust",
+    "scala": "Scala",
+    "kotlin": "Kotlin",
+    "swift": "Swift",
+    "matlab": "MATLAB",
+    "react": "React",
+    "angular": "Angular",
+    "vue": "Vue",
+    "node": "Node",
+    "nodejs": "Node.js",
+    "django": "Django",
+    "flask": "Flask",
+    "spring": "Spring",
+    "pytorch": "PyTorch",
+    "tensorflow": "TensorFlow",
+    "numpy": "NumPy",
+    "pandas": "pandas",
+    "scikit": "scikit-learn",
+    "spark": "Spark",
+    "hadoop": "Hadoop",
+    "airflow": "Airflow",
+    "tableau": "Tableau",
+    "excel": "Excel",
+    "powerpoint": "PowerPoint",
+    "figma": "Figma",
+    "salesforce": "Salesforce",
+    "sap": "SAP",
+    "autocad": "AutoCAD",
+    "solidworks": "SolidWorks",
+    "gaap": "GAAP",
+    "ifrs": "IFRS",
+    "seo": "SEO",
+    "sem": "SEM",
+    "crm": "CRM",
+    "saas": "SaaS",
+    "b2b": "B2B",
+    "b2c": "B2C",
+    "kpi": "KPI",
+    "kpis": "KPIs",
+    "roi": "ROI",
+    "ux": "UX",
+    "ui": "UI",
+    "qa": "QA",
+    "gpa": "GPA",
+}
+
+
+def display_form(surface: str) -> str:
+    """How a term should be written for a human to read.
+
+    ``tokenize_with_surface`` lowercases before tokenising, so the surface form
+    keeps inflection but never capitalisation, and the UI would otherwise render
+    "kubernetes", "aws", "c++" where a person writes "Kubernetes", "AWS", "C++".
+    """
+    return _DISPLAY_CASE.get(surface, surface)
 
 
 def profile(text: str) -> TermProfile:

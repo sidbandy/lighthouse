@@ -168,10 +168,161 @@ def list_stories(session: Session, *, user_id: uuid.UUID | None = None) -> list[
     )
 
 
+def update_story(session: Session, story_id: uuid.UUID, data: StoryInput) -> CorpusStory | None:
+    story = session.get(CorpusStory, story_id)
+    if story is None:
+        return None
+    if not data.title.strip():
+        raise ValueError("a story needs a title")
+    story.title = data.title.strip()
+    story.situation = data.situation.strip()
+    story.task = data.task.strip()
+    story.action = data.action.strip()
+    story.result = data.result.strip()
+    story.source_fact_ids = _verify_fact_ids(session, data.source_fact_ids)
+    story.competency_tags = [t.strip().lower() for t in data.competency_tags if t.strip()]
+    session.flush()
+    return story
+
+
+def delete_story(session: Session, story_id: uuid.UUID) -> bool:
+    story = session.get(CorpusStory, story_id)
+    if story is None:
+        return False
+    session.delete(story)
+    return True
+
+
 def unverified_stories(session: Session, *, user_id: uuid.UUID | None = None) -> list[CorpusStory]:
     """Stories with no backing fact. Surfaced so the operator can fix them
     before they are relied on in practice."""
     return [s for s in list_stories(session, user_id=user_id) if not s.source_fact_ids]
+
+
+# --------------------------------------------------------------------------
+# Story coverage
+# --------------------------------------------------------------------------
+
+# The competencies behind most behavioral questions. Deliberately short: a
+# question bank runs to hundreds of phrasings but tests a handful of things, and
+# one strong story flexibly covers several of them. The prompts are what the
+# competency actually asks for, so the operator is not guessing at a label.
+COMPETENCIES: tuple[tuple[str, str], ...] = (
+    ("ownership", "You took responsibility for an outcome, not just a task"),
+    ("conflict", "You disagreed with someone and handled it"),
+    ("ambiguity", "You made progress without clear requirements"),
+    ("failure", "Something went wrong and you did something about it"),
+    ("leadership", "You moved a group, with or without the title"),
+    ("prioritization", "You chose what not to do, under a real constraint"),
+    ("learning", "You picked something up fast because you had to"),
+    ("impact", "A result you can state in numbers"),
+    ("teamwork", "You worked with people who wanted different things"),
+)
+
+# Below this, "4 of 6 stories draw on one project" is not a pattern, it is a
+# small number. Silence is the honest output.
+_MIN_STORIES_FOR_RELIANCE = 4
+
+
+@dataclass(slots=True)
+class CompetencyCoverage:
+    """One competency and the stories that cover it."""
+
+    slug: str
+    prompt: str
+    story_titles: list[str]
+
+    @property
+    def story_count(self) -> int:
+        return len(self.story_titles)
+
+
+@dataclass(slots=True)
+class SourceReliance:
+    """One fact and how many stories lean on it."""
+
+    fact_id: uuid.UUID
+    fact_title: str
+    story_count: int
+
+
+@dataclass(slots=True)
+class StoryCoverageReport:
+    """Which competencies have a story, and which projects are carrying too
+    many of them. Deterministic set logic over what the operator wrote -- it
+    turns "prep behavioral" from a mood into a finite list."""
+
+    story_count: int
+    verified_count: int
+    competencies: list[CompetencyCoverage]
+    reliance: list[SourceReliance]
+
+    @property
+    def uncovered(self) -> list[CompetencyCoverage]:
+        return [c for c in self.competencies if c.story_count == 0]
+
+    def note(self) -> str:
+        if self.story_count == 0:
+            return (
+                "No stories yet. Most behavioral questions are a handful of competencies "
+                "asked a hundred ways, so a few good ones cover a lot of ground."
+            )
+        missing = self.uncovered
+        parts = [f"{self.story_count} stories covering {len(self.competencies) - len(missing)} "
+                 f"of {len(self.competencies)} competencies."]
+        if missing:
+            parts.append("No story yet for " + ", ".join(c.slug for c in missing[:3]) + ".")
+        if self.verified_count < self.story_count:
+            unverified = self.story_count - self.verified_count
+            parts.append(f"{unverified} not tied to a corpus fact.")
+        return " ".join(parts)
+
+
+def story_coverage(session: Session, *, user_id: uuid.UUID | None = None) -> StoryCoverageReport:
+    """Competency gaps and over-relied-on projects, from real tags only.
+
+    A competency is covered when a story is tagged with it. Nothing is inferred
+    from the prose: guessing that a story "sounds like conflict" would invent a
+    coverage the operator never claimed, and they would find out in the room.
+    """
+    stories = list_stories(session, user_id=user_id)
+    facts = {f.id: f for f in list_facts(session, user_id=user_id)}
+
+    by_slug: dict[str, list[str]] = {slug: [] for slug, _ in COMPETENCIES}
+    reliance_counts: dict[uuid.UUID, int] = {}
+    for story in stories:
+        for tag in story.competency_tags or []:
+            if tag in by_slug:
+                by_slug[tag].append(story.title)
+        for fact_id in story.source_fact_ids or []:
+            reliance_counts[fact_id] = reliance_counts.get(fact_id, 0) + 1
+
+    reliance: list[SourceReliance] = []
+    if len(stories) >= _MIN_STORIES_FOR_RELIANCE:
+        threshold = (len(stories) + 1) // 2
+        reliance = sorted(
+            (
+                SourceReliance(
+                    fact_id=fact_id,
+                    fact_title=facts[fact_id].title,
+                    story_count=count,
+                )
+                for fact_id, count in reliance_counts.items()
+                if count >= threshold and fact_id in facts
+            ),
+            key=lambda r: r.story_count,
+            reverse=True,
+        )
+
+    return StoryCoverageReport(
+        story_count=len(stories),
+        verified_count=sum(1 for s in stories if s.source_fact_ids),
+        competencies=[
+            CompetencyCoverage(slug=slug, prompt=prompt, story_titles=by_slug[slug])
+            for slug, prompt in COMPETENCIES
+        ],
+        reliance=reliance,
+    )
 
 
 # --------------------------------------------------------------------------

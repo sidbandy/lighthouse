@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import type { PostingDetail } from "../api/types";
+import type { ApplicationEvent, Eligibility, PostingDetail, TrackedState } from "../api/types";
 import { relativeAge, sourceLabel, sponsorshipLabel, termRuleLabel } from "../lib/format";
 import { GhostChecklist } from "./GhostChecklist";
 import { MatchMeter } from "./MatchMeter";
@@ -18,7 +18,17 @@ import { TermChips } from "./TermChips";
 // matter. Those six lead; the original description stays available underneath
 // for when the parser missed something.
 
-export function PostingDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
+export function PostingDrawer({
+  id,
+  onClose,
+  onTrackedChange,
+}: {
+  id: string | null;
+  onClose: () => void;
+  /** Fired when the posting's board state changes, so the list behind can
+   *  re-render its marker without a manual reload. */
+  onTrackedChange?: () => void;
+}) {
   const [posting, setPosting] = useState<PostingDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,14 +62,25 @@ export function PostingDrawer({ id, onClose }: { id: string | null; onClose: () 
       <div className="relative w-full max-w-3xl bg-white rounded-xl border border-navy-200 shadow-lift animate-fade-in my-auto">
         {loading && <div className="p-8 text-sm text-navy-500">Loading…</div>}
         {error && <div className="p-8 text-sm text-bad">Could not load posting. {error}</div>}
-        {posting && <DrawerBody posting={posting} onClose={onClose} />}
+        {posting && (
+          <DrawerBody posting={posting} onClose={onClose} onTrackedChange={onTrackedChange} />
+        )}
       </div>
     </div>
   );
 }
 
-function DrawerBody({ posting, onClose }: { posting: PostingDetail; onClose: () => void }) {
+function DrawerBody({
+  posting,
+  onClose,
+  onTrackedChange,
+}: {
+  posting: PostingDetail;
+  onClose: () => void;
+  onTrackedChange?: () => void;
+}) {
   const sponsorship = sponsorshipLabel(posting.sponsorship);
+  const [tracked, setTracked] = useState(posting.tracked);
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -96,11 +117,22 @@ function DrawerBody({ posting, onClose }: { posting: PostingDetail; onClose: () 
         </p>
       )}
 
-      <div className="flex gap-2">
+      {posting.eligibility && posting.eligibility.verdict !== "not_stated" && (
+        <EligibilityNote eligibility={posting.eligibility} />
+      )}
+
+      <div className="flex gap-2 items-start">
         <a href={posting.url} target="_blank" rel="noreferrer" className="btn-primary flex-1">
           Open application ↗
         </a>
-        <TrackActions postingId={posting.id} />
+        <TrackActions
+          postingId={posting.id}
+          tracked={tracked}
+          onChange={(next) => {
+            setTracked(next);
+            onTrackedChange?.();
+          }}
+        />
       </div>
 
       {posting.brief && (
@@ -177,65 +209,151 @@ function DrawerBody({ posting, onClose }: { posting: PostingDetail; onClose: () 
 }
 
 /**
- * The Discover → Track hop. Two buttons rather than one, because saving
- * something to read later and recording that you actually sent it are different
- * facts, and the second one is dated — it seeds every wait-time figure the
- * funnel will later report.
+ * The graduation-window check, shown only when the posting actually states one.
+ *
+ * Silent on `not_stated`, which is most postings — an absence rendered as a
+ * reassuring green tick would be a claim the posting never made.
  */
-function TrackActions({ postingId }: { postingId: string }) {
-  const [state, setState] = useState<"idle" | "saving" | "saved" | "applied">("idle");
+function EligibilityNote({ eligibility }: { eligibility: Eligibility }) {
+  const blocked = eligibility.verdict === "not_eligible";
+  return (
+    <section
+      className={`card p-3 ${blocked ? "border-bad/30 bg-bad/5" : "border-good/25 bg-good/5"}`}
+    >
+      <p className={`text-xs font-600 ${blocked ? "text-bad" : "text-good"}`}>
+        {eligibility.headline}
+      </p>
+      <p className="text-2xs text-navy-600 mt-0.5 leading-relaxed">{eligibility.detail}</p>
+      {eligibility.evidence && (
+        <p className="text-2xs text-navy-500 mt-1 italic">“{eligibility.evidence}”</p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The Discover → Track hop, and the answer to "have I already applied to this?"
+ *
+ * Untracked, it offers two buttons rather than one: saving something to read
+ * later and recording that you actually sent it are different facts, and the
+ * second is dated — it seeds every wait-time figure the funnel later reports.
+ * Tracked, it stops offering to save and shows where the application actually
+ * is, with only the transitions that make sense from there.
+ */
+function TrackActions({
+  postingId,
+  tracked,
+  onChange,
+}: {
+  postingId: string;
+  tracked: TrackedState | null;
+  onChange: (next: TrackedState) => void;
+}) {
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Applications get logged days after they were sent as often as not, and the
   // date is what every wait-time figure on the board is computed from.
   const [on, setOn] = useState(today());
 
-  const run = (event?: "applied") => {
-    setState("saving");
+  const run = async (event?: ApplicationEvent) => {
+    setBusy(true);
     setError(null);
-    api
-      .trackPosting(postingId, event ? { event_type: event, occurred_at: atMidday(on) } : undefined)
-      .then(() => setState(event ? "applied" : "saved"))
-      .catch((e) => {
-        setError(String(e.message ?? e));
-        setState("idle");
+    try {
+      const payload = event ? { event_type: event, occurred_at: atMidday(on) } : undefined;
+      const application =
+        tracked && payload
+          ? await api.logEvent(tracked.application_id, payload)
+          : await api.trackPosting(postingId, payload);
+      onChange({
+        application_id: application.id,
+        stage: application.stage,
+        stage_label: application.stage_label,
+        is_live: application.is_live,
+        is_terminal: application.is_terminal,
+        applied_at: tracked?.applied_at ?? null,
+        days_silent: application.days_silent,
+        silence_note: application.silence_note,
+        next_events: application.next_events,
       });
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  if (state === "saved" || state === "applied") {
+  const dateInput = (
+    <input
+      type="date"
+      value={on}
+      max={today()}
+      onChange={(e) => setOn(e.target.value || today())}
+      title="When this actually happened. Change it when logging something from last week."
+      className="text-2xs bg-white border border-navy-200 rounded px-1.5 py-1 text-navy-700
+                 hover:border-navy-300 focus:border-beacon-500 outline-none"
+    />
+  );
+
+  if (!tracked) {
     return (
-      <span className="btn text-xs text-good border border-good/30 bg-good/5 shrink-0">
-        ✓ {state === "applied" ? "Logged as applied" : "On your board"}
-      </span>
+      <div className="flex items-center gap-1.5 shrink-0" title={error ?? undefined}>
+        <button
+          onClick={() => run()}
+          disabled={busy}
+          className="btn-toggle text-xs"
+          title="Add to your board without marking it applied"
+        >
+          Save
+        </button>
+        <button
+          onClick={() => run("applied")}
+          disabled={busy}
+          className="btn-toggle text-xs"
+          title="Record that you applied, on the date shown"
+        >
+          I applied
+        </button>
+        {dateInput}
+      </div>
     );
   }
 
   return (
-    <div className="flex items-center gap-1.5 shrink-0" title={error ?? undefined}>
-      <button
-        onClick={() => run()}
-        disabled={state === "saving"}
-        className="btn-toggle text-xs"
-        title="Add to your board without marking it applied"
-      >
-        Save
-      </button>
-      <button
-        onClick={() => run("applied")}
-        disabled={state === "saving"}
-        className="btn-toggle text-xs"
-        title="Record that you applied, on the date shown"
-      >
-        I applied
-      </button>
-      <input
-        type="date"
-        value={on}
-        max={today()}
-        onChange={(e) => setOn(e.target.value || today())}
-        title="The date you applied. Change it when logging something you sent earlier."
-        className="text-2xs bg-white border border-navy-200 rounded px-1.5 py-1 text-navy-700
-                   hover:border-navy-300 focus:border-beacon-500 outline-none"
-      />
+    <div className="shrink-0 text-right space-y-1" title={error ?? undefined}>
+      <div className="flex items-center justify-end gap-1.5">
+        <span
+          className={`chip ${
+            tracked.is_terminal
+              ? "text-navy-400"
+              : "border-good/30 text-good bg-good/5"
+          }`}
+        >
+          {tracked.is_terminal ? "" : "✓ "}
+          {tracked.stage_label}
+        </span>
+        {tracked.next_events.length > 0 && dateInput}
+      </div>
+      {tracked.silence_note && (
+        <p className="text-2xs text-navy-500">{tracked.silence_note}</p>
+      )}
+      {tracked.next_events.length > 0 && (
+        <div className="flex flex-wrap justify-end gap-1">
+          {tracked.next_events.map((t) => (
+            <button
+              key={t.event_type}
+              onClick={() => run(t.event_type)}
+              disabled={busy}
+              className={`text-2xs px-1.5 py-0.5 rounded transition-colors disabled:opacity-40 ${
+                t.is_setback
+                  ? "text-navy-400 hover:text-bad hover:bg-bad/5"
+                  : "text-navy-600 hover:text-beacon-700 hover:bg-beacon-glow"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

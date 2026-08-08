@@ -21,8 +21,12 @@ import type {
   Onboarding,
   PostingDetail,
   RefreshStatus,
+  ResumeVersion,
   RoleFamily,
   SourceHealth,
+  Story,
+  StoryBank,
+  StoryInput,
   StudentProfile,
   TailorReport,
 } from "./types";
@@ -122,6 +126,13 @@ export const api = {
   coverage: (roleFamilies?: RoleFamily[]) =>
     get<Coverage>("/api/corpus/coverage", { role_family: roleFamilies }),
 
+  // --- Corpus: stories ---
+  stories: () => get<StoryBank>("/api/corpus/stories"),
+  createStory: (story: StoryInput) => send<Story>("POST", "/api/corpus/stories", story),
+  updateStory: (id: string, story: StoryInput) =>
+    send<Story>("PATCH", `/api/corpus/stories/${id}`, story),
+  deleteStory: (id: string) => send<void>("DELETE", `/api/corpus/stories/${id}`),
+
   // --- Onboarding ---
   onboarding: () => get<Onboarding>("/api/onboarding"),
   saveConstraints: (constraints: Constraints) =>
@@ -145,6 +156,18 @@ export const api = {
     event: { event_type: ApplicationEvent; occurred_at?: string; note?: string },
   ) => send<Application>("POST", `/api/applications/${applicationId}/events`, event),
   untrack: (applicationId: string) => send<void>("DELETE", `/api/applications/${applicationId}`),
+  /** Notes and which résumé went out are corrections to a record, not dated
+   *  events, so they are a patch rather than a log entry. */
+  patchApplication: (
+    applicationId: string,
+    patch: { notes?: string; resume_version_id?: string; clear_resume_version?: boolean },
+  ) => send<Application>("PATCH", `/api/applications/${applicationId}`, patch),
+
+  // --- Track: résumé versions ---
+  resumeVersions: () => get<ResumeVersion[]>("/api/resume/versions"),
+  saveResumeVersion: (version: { label: string; extracted_text?: string; notes?: string }) =>
+    send<ResumeVersion>("POST", "/api/resume/versions", version),
+  deleteResumeVersion: (id: string) => send<void>("DELETE", `/api/resume/versions/${id}`),
 
   // --- Ingest ---
   startRefresh: () => send<RefreshStatus>("POST", "/api/ingest/refresh?max_tier=3"),

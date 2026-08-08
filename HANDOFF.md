@@ -12,7 +12,11 @@ The thesis (from the spec): **the phases of a job search are not independent, an
 
 The name: a lighthouse gives lost students clarity and direction in a chaotic job market.
 
-**The spec** is `LIGHTHOUSE_SPEC.md` in the repo root (written under the project's old working name "Beacon" — the code is all "Lighthouse"). It defines six phases: Discover, Track & Tailor, Company Intelligence, Networking, Study, Practice, plus a cross-cutting Briefing. **The full build plan** is at `~/.claude/plans/ik-it-says-beacon-toasty-pebble.md` — read it; it has the source catalog, module-by-module design, and the operating principles.
+**The current brief is `LIGHTHOUSE.md` in the repo root** — what the project is, the rules, what works, what is not built, and a page-by-page account of the UI. Read it first.
+
+The original spec (written under the old working name "Beacon") defined six phases: Discover, Track & Tailor, Company Intelligence, **Networking**, Study, Practice, plus a cross-cutting Briefing. **That file was lost** — `LIGHTHOUSE_SPEC.md` is not in the repo and not anywhere in git history, so earlier sessions worked from the build plan at `~/.claude/plans/ik-it-says-beacon-toasty-pebble.md` instead. Be careful with that plan: it has the source catalog and module design, but it **silently dropped Networking** (its §12 defers it), so it understates the scope by a whole phase. `LIGHTHOUSE.md` is the corrected account.
+
+**Parts 4 and 5 — Networking, and Study/Practice — are the priority**, and are the reason a student would open this at all. Parts 1–3 are being finished first only because 4–6 read from all three.
 
 ---
 

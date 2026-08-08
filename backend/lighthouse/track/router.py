@@ -19,9 +19,10 @@ from ..core.corpus import corpus_documents
 from ..core.db import get_session
 from ..core.models import Application, Posting
 from ..discover.match import build_index
-from . import applications, ats_check, funnel, tailor
+from . import applications, ats_check, funnel, resumes, tailor
 from .schemas import (
     ApplicationOut,
+    ApplicationPatchIn,
     AtsReportOut,
     BoardOut,
     ConversionOut,
@@ -31,9 +32,13 @@ from .schemas import (
     LogEventIn,
     ParsePreviewOut,
     RequirementOut,
+    ResumeVersionIn,
+    ResumeVersionOut,
     StageCountOut,
     StageEntryOut,
     TailorReportOut,
+    TransitionOut,
+    VersionOutcomeOut,
     WaitTimeOut,
 )
 
@@ -198,8 +203,13 @@ def _application_out(state: applications.ApplicationState, posting: Posting) -> 
             for e in state.timeline
         ],
         notes=state.notes,
+        resume_version_id=state.resume_version_id,
         days_silent=state.days_silent(),
         silence_note=state.silence_note(),
+        next_events=[
+            TransitionOut(event_type=t.event_type, label=t.label, is_setback=t.is_setback)
+            for t in applications.transitions_from(state.stage)
+        ],
     )
 
 
@@ -240,10 +250,91 @@ def _funnel_out(report: funnel.FunnelReport) -> FunnelOut:
 def get_board(session: Session = Depends(get_session)) -> BoardOut:
     """Every application, folded from its events, plus the funnel over them."""
     rows = applications.board(session)
+    states = [state for state, _ in rows]
     return BoardOut(
         applications=[_application_out(state, posting) for state, posting in rows],
-        funnel=_funnel_out(funnel.build([state for state, _ in rows])),
+        funnel=_funnel_out(funnel.build(states)),
+        resume_versions=[
+            ResumeVersionOut.model_validate(v) for v in resumes.list_versions(session)
+        ],
+        version_outcomes=[
+            VersionOutcomeOut(
+                version_id=o.version_id,
+                label=o.label,
+                applied=o.applied,
+                responded=o.responded,
+                statement=o.statement,
+            )
+            for o in resumes.outcomes_by_version(session, states)
+        ],
     )
+
+
+# --------------------------------------------------------------------------
+# Résumé versions
+# --------------------------------------------------------------------------
+
+
+@router.get("/resume/versions", response_model=list[ResumeVersionOut])
+def list_resume_versions(session: Session = Depends(get_session)) -> list[ResumeVersionOut]:
+    return [ResumeVersionOut.model_validate(v) for v in resumes.list_versions(session)]
+
+
+@router.post("/resume/versions", response_model=ResumeVersionOut, status_code=201)
+def create_resume_version(
+    payload: ResumeVersionIn, session: Session = Depends(get_session)
+) -> ResumeVersionOut:
+    """Record a résumé the operator sent. Lighthouse tracks and scores; it does
+    not generate, so this stores the label and the text, nothing more."""
+    try:
+        version = resumes.save_version(
+            session,
+            label=payload.label,
+            extracted_text=payload.extracted_text,
+            notes=payload.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return ResumeVersionOut.model_validate(version)
+
+
+@router.delete("/resume/versions/{version_id}", status_code=204)
+def delete_resume_version(version_id: UUID, session: Session = Depends(get_session)) -> None:
+    if not resumes.delete_version(session, version_id):
+        raise HTTPException(status_code=404, detail="Résumé version not found")
+    session.commit()
+
+
+@router.patch("/applications/{application_id}", response_model=ApplicationOut)
+def patch_application(
+    application_id: UUID,
+    payload: ApplicationPatchIn,
+    session: Session = Depends(get_session),
+) -> ApplicationOut:
+    """Edit the parts of an application that are not dated events.
+
+    Notes and which résumé went out are corrections to a record, not things
+    that happened on a date, so they are edits rather than log entries.
+    """
+    application = session.get(Application, application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    if payload.notes is not None:
+        application.notes = payload.notes.strip() or None
+    if payload.clear_resume_version:
+        application.resume_version_id = None
+    elif payload.resume_version_id is not None:
+        try:
+            resumes.set_application_version(session, application, payload.resume_version_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    session.commit()
+    posting = session.get(Posting, application.posting_id)
+    history = event_log.history(session, entity_type=applications.ENTITY, entity_id=application.id)
+    return _application_out(applications.fold(application, history), posting)
 
 
 @router.post("/postings/{posting_id}/apply", response_model=ApplicationOut, status_code=201)
@@ -317,5 +408,9 @@ def untrack(application_id: UUID, session: Session = Depends(get_session)) -> No
     application = session.get(Application, application_id)
     if application is None:
         raise HTTPException(status_code=404, detail="Application not found")
+    # The events go too. `events` has no foreign key to `applications` by
+    # design — the log outlives what it describes — so nothing cascades, and
+    # untracking means "this was a mistake, forget it" rather than "this ended".
+    event_log.discard(session, entity_type=applications.ENTITY, entity_id=application.id)
     session.delete(application)
     session.commit()

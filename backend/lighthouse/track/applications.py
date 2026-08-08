@@ -8,6 +8,7 @@ correction additive, and lets silence be measured rather than guessed at.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from enum import IntEnum
@@ -82,6 +83,63 @@ STAGE_LABELS: dict[Stage, str] = {
 # Silence is measured from the last employer signal, so these do not reset it —
 # otherwise adding a note to a dead application would make it look alive.
 OPERATOR_EVENTS = frozenset({"saved", "applied", "note", "withdrawn"})
+
+
+@dataclass(frozen=True, slots=True)
+class Transition:
+    """One thing that can honestly be logged next.
+
+    ``is_setback`` only tells the UI how to render it. A rejection is as real a
+    fact as an offer and is never hidden or discouraged.
+    """
+
+    event_type: str
+    label: str
+    is_setback: bool = False
+
+
+# What can be logged next, given where an application actually is. Data rather
+# than a chain of ifs, and served to the client so the board and the posting
+# window cannot drift into offering different transitions for the same row.
+NEXT_EVENTS: dict[Stage, tuple[Transition, ...]] = {
+    Stage.SAVED: (
+        Transition("applied", "Applied"),
+        Transition("withdrawn", "Not applying", is_setback=True),
+    ),
+    Stage.APPLIED: (
+        Transition("assessment_received", "Got an OA"),
+        Transition("interview_scheduled", "Interview booked"),
+        Transition("rejected", "Rejected", is_setback=True),
+        Transition("withdrawn", "Withdrew", is_setback=True),
+    ),
+    Stage.ASSESSMENT: (
+        Transition("assessment_completed", "OA done"),
+        Transition("interview_scheduled", "Interview booked"),
+        Transition("rejected", "Rejected", is_setback=True),
+    ),
+    Stage.INTERVIEW: (
+        Transition("interview_completed", "Interview done"),
+        Transition("final_round", "Final round"),
+        Transition("offer", "Offer"),
+        Transition("rejected", "Rejected", is_setback=True),
+    ),
+    Stage.FINAL: (
+        Transition("offer", "Offer"),
+        Transition("rejected", "Rejected", is_setback=True),
+    ),
+    Stage.OFFER: (
+        Transition("accepted", "Accepted"),
+        Transition("rejected", "Declined", is_setback=True),
+    ),
+    Stage.REJECTED: (),
+    Stage.WITHDRAWN: (),
+    Stage.ACCEPTED: (),
+}
+
+
+def transitions_from(stage: Stage) -> list[Transition]:
+    """What can be logged next from ``stage``. Empty once terminal."""
+    return list(NEXT_EVENTS.get(stage, ()))
 
 
 @dataclass(slots=True)
@@ -253,6 +311,45 @@ def log_event(
         occurred_at=occurred_at,
         user_id=user_id,
     )
+
+
+def states_for_postings(
+    session: Session,
+    posting_ids: Sequence[uuid.UUID],
+    *,
+    user_id: uuid.UUID | None = None,
+) -> dict[uuid.UUID, ApplicationState]:
+    """Folded state for whichever of ``posting_ids`` are already on the board.
+
+    Two queries however many postings are asked about, so Discover can mark a
+    whole page without one lookup per row. Untracked postings are absent from
+    the result rather than present with a null stage — "not on the board" is not
+    a stage.
+    """
+    from ..core.config import get_settings
+
+    ids = {pid for pid in posting_ids}
+    if not ids:
+        return {}
+
+    uid = user_id or get_settings().operator_id
+    tracked = list(
+        session.scalars(
+            select(Application).where(
+                Application.user_id == uid, Application.posting_id.in_(ids)
+            )
+        )
+    )
+    if not tracked:
+        return {}
+
+    histories = event_log.history_for_many(
+        session,
+        entity_type=ENTITY,
+        entity_ids=[a.id for a in tracked],
+        user_id=uid,
+    )
+    return {a.posting_id: fold(a, histories.get(a.id, [])) for a in tracked}
 
 
 def board(

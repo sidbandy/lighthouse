@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FindingOut(BaseModel):
@@ -76,6 +76,49 @@ class TailorReportOut(BaseModel):
 
 
 # --------------------------------------------------------------------------
+# Résumé versions
+# --------------------------------------------------------------------------
+
+
+class ResumeVersionIn(BaseModel):
+    label: str = Field(description="What the operator calls it, e.g. 'v3 — security lead'.")
+    extracted_text: str = ""
+    notes: str | None = None
+
+
+class ResumeVersionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    label: str
+    notes: str | None = None
+    created_at: datetime
+
+
+class VersionOutcomeOut(BaseModel):
+    """What happened to the applications that used one version. Counts only —
+    a response rate over four applications is noise wearing a percent sign."""
+
+    version_id: UUID
+    label: str
+    applied: int
+    responded: int
+    statement: str
+
+
+class ApplicationPatchIn(BaseModel):
+    """Fields on an application that are corrections rather than events.
+
+    Notes and which résumé was sent are not things that *happened* on a date,
+    so they are edits, not entries in the log.
+    """
+
+    notes: str | None = None
+    resume_version_id: UUID | None = None
+    clear_resume_version: bool = False
+
+
+# --------------------------------------------------------------------------
 # Applications: the board and the funnel
 # --------------------------------------------------------------------------
 
@@ -89,6 +132,20 @@ class StageEntryOut(BaseModel):
     label: str
     occurred_at: datetime
     note: str = ""
+
+
+class TransitionOut(BaseModel):
+    """A stage change that can honestly be logged from where a row is now.
+
+    Served rather than hard-coded in the client so the board and the posting
+    window cannot drift into offering different transitions for the same row.
+    """
+
+    event_type: str
+    label: str
+    is_setback: bool = Field(
+        default=False, description="Render quieter. A setback is still a fact worth logging."
+    )
 
 
 class ApplicationOut(BaseModel):
@@ -106,6 +163,7 @@ class ApplicationOut(BaseModel):
     is_terminal: bool
     timeline: list[StageEntryOut]
     notes: str | None = None
+    resume_version_id: UUID | None = None
 
     days_silent: int | None = Field(
         default=None,
@@ -113,6 +171,45 @@ class ApplicationOut(BaseModel):
         "two real dates — never a probability of being ghosted.",
     )
     silence_note: str | None = None
+    next_events: list[TransitionOut] = []
+
+
+class TrackedStateOut(BaseModel):
+    """Where a posting already sits on the board.
+
+    Discover carries this so a posting that is already applied to can say so
+    instead of offering to save it again. It is absent entirely for an untracked
+    posting — "not on the board" is not a stage.
+    """
+
+    application_id: UUID
+    stage: str
+    stage_label: str
+    is_live: bool
+    is_terminal: bool
+    applied_at: datetime | None = None
+    days_silent: int | None = None
+    silence_note: str | None = None
+    next_events: list[TransitionOut] = []
+
+    @classmethod
+    def from_state(cls, state) -> TrackedStateOut:
+        from .applications import STAGE_LABELS, transitions_from
+
+        return cls(
+            application_id=state.application_id,
+            stage=state.stage.name,
+            stage_label=STAGE_LABELS[state.stage],
+            is_live=state.stage.is_live,
+            is_terminal=state.stage.is_terminal,
+            applied_at=state.applied_at,
+            days_silent=state.days_silent(),
+            silence_note=state.silence_note(),
+            next_events=[
+                TransitionOut(event_type=t.event_type, label=t.label, is_setback=t.is_setback)
+                for t in transitions_from(state.stage)
+            ],
+        )
 
 
 class StageCountOut(BaseModel):
@@ -151,6 +248,8 @@ class FunnelOut(BaseModel):
 class BoardOut(BaseModel):
     applications: list[ApplicationOut]
     funnel: FunnelOut
+    resume_versions: list[ResumeVersionOut] = []
+    version_outcomes: list[VersionOutcomeOut] = []
 
 
 class LogEventIn(BaseModel):
