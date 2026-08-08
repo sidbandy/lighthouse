@@ -109,6 +109,9 @@ class MatchResult:
     # derived from two terms is arithmetically fine and practically
     # meaningless, so the count travels with it.
     terms_considered: int = 0
+    # Facts in the corpus at scoring time. Zero means the score is an absence of
+    # data rather than a judgement, and every line about it has to say so.
+    corpus_size: int = 0
 
     @property
     def core_gaps(self) -> list[TermMatch]:
@@ -131,6 +134,8 @@ class MatchResult:
         computed from a full description, and a coverage ratio over a handful
         of terms is weaker still. The UI must be able to say both.
         """
+        if self.corpus_size == 0:
+            return "nothing to compare against"
         if not self.description_available:
             return "title only - weak evidence"
         if self.is_thin_evidence:
@@ -138,8 +143,21 @@ class MatchResult:
         return f"full description, {self.terms_considered} terms compared"
 
     def summary(self) -> str:
+        """What the score means, in a sentence.
+
+        The two zero cases are called out rather than folded into the normal
+        phrasing. "0 terms evidenced, no significant gaps" reads as
+        reassurance, and against an empty corpus a score of 0 is an absence of
+        data, not a verdict -- reporting it as one is exactly the invented
+        claim this project refuses to make.
+        """
+        if self.corpus_size == 0:
+            return "Nothing to compare against yet - your corpus is empty"
         if not self.matched and not self.gaps:
             return "No comparable terms found"
+        if not self.matched:
+            return f"Your corpus evidences none of its {len(self.gaps)} comparable terms"
+
         parts = [f"{len(self.matched)} terms evidenced"]
         if self.wording:
             parts.append(f"{len(self.wording)} to reword")
@@ -359,4 +377,5 @@ def match(
         gaps=gaps[:max_terms],
         wording=wording[:max_terms],
         description_available=bool(description and description.strip()),
+        corpus_size=index.doc_count,
     )

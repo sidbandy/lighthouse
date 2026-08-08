@@ -57,6 +57,23 @@ SEED_TARGETS: tuple[tuple[str, str, str], ...] = (
     ("ashby", "scale", "Scale AI"),
     ("ashby", "linear", "Linear"),
     ("ashby", "vercel", "Vercel"),
+    ("ashby", "notion", "Notion"),
+    # Mid-tier employers with real intern programmes. The seed list was
+    # entirely elite and high-tier, which biased description coverage toward
+    # exactly the companies hardest to get into -- and descriptions are what
+    # match scoring runs on, so the postings the operator could best evaluate
+    # were the ones they were least likely to get. Every slug below was hit
+    # live and returned a board carrying student roles.
+    ("greenhouse", "samsara", "Samsara"),
+    ("greenhouse", "affirm", "Affirm"),
+    ("greenhouse", "fanduel", "FanDuel"),
+    ("greenhouse", "tripadvisor", "Tripadvisor"),
+    ("greenhouse", "cargurus", "CarGurus"),
+    ("greenhouse", "klaviyo", "Klaviyo"),
+    ("greenhouse", "asana", "Asana"),
+    ("greenhouse", "peloton", "Peloton"),
+    ("greenhouse", "dropbox", "Dropbox"),
+    ("greenhouse", "squarespace", "Squarespace"),
 )
 
 # Board slug as it appears in a posting URL, per vendor.

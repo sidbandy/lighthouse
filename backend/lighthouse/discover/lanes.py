@@ -46,6 +46,21 @@ SEED_TIERS: dict[str, str] = {
     "openai": TIER_ELITE,
     "anthropic": TIER_ELITE,
     "nvidia": TIER_ELITE,
+    "netflix": TIER_ELITE,
+    "spacex": TIER_ELITE,
+    "point72": TIER_ELITE,
+    "susquehanna": TIER_ELITE,
+    "five rings capital": TIER_ELITE,
+    "radix trading": TIER_ELITE,
+    "old mission capital": TIER_ELITE,
+    "akuna capital": TIER_ELITE,
+    "belvedere trading": TIER_ELITE,
+    "tower research capital": TIER_ELITE,
+    "millennium": TIER_ELITE,
+    "aqr capital management": TIER_ELITE,
+    "mckinsey and company": TIER_ELITE,
+    "bain and company": TIER_ELITE,
+    "boston consulting group": TIER_ELITE,
     # High: strong, well-known, still very competitive.
     "stripe": TIER_HIGH,
     "databricks": TIER_HIGH,
@@ -61,12 +76,59 @@ SEED_TIERS: dict[str, str] = {
     "doordash": TIER_HIGH,
     "amazon": TIER_HIGH,
     "microsoft": TIER_HIGH,
-    # Accessible: strong return on a tailored application.
+    "tiktok": TIER_HIGH,
+    "bytedance": TIER_HIGH,
+    "tesla": TIER_HIGH,
+    "anduril": TIER_HIGH,
+    "neuralink": TIER_HIGH,
+    "etched": TIER_HIGH,
+    "astranis": TIER_HIGH,
+    "zipline": TIER_HIGH,
+    "rocket lab": TIER_HIGH,
+    "goldman sachs": TIER_HIGH,
+    "jp morgan": TIER_HIGH,
+    "morgan stanley": TIER_HIGH,
+    "deloitte": TIER_HIGH,
+    # Mid is the default and needs no entries. Listed here only where a company
+    # would otherwise be read as more or less selective than it is.
+    "bosch": TIER_MID,
+    "red bull": TIER_MID,
+    "western digital": TIER_MID,
+    "veeva systems": TIER_MID,
+    "abbvie": TIER_MID,
+    "nbcuniversal": TIER_MID,
+    "smiths detection": TIER_MID,
+    # Accessible: hire at volume, and a tailored application genuinely converts.
+    # This end of the table is what makes the Safety lane exist at all, so it is
+    # kept populated deliberately -- a lane that is structurally always empty
+    # teaches the operator to stop looking at it.
     "ibm": TIER_ACCESSIBLE,
     "oracle": TIER_ACCESSIBLE,
     "cisco": TIER_ACCESSIBLE,
     "dell": TIER_ACCESSIBLE,
     "accenture": TIER_ACCESSIBLE,
+    "leidos": TIER_ACCESSIBLE,
+    "peraton": TIER_ACCESSIBLE,
+    "booz allen hamilton": TIER_ACCESSIBLE,
+    "general dynamics": TIER_ACCESSIBLE,
+    "saic": TIER_ACCESSIBLE,
+    "caci": TIER_ACCESSIBLE,
+    "mantech": TIER_ACCESSIBLE,
+    "northrop grumman": TIER_ACCESSIBLE,
+    "l3harris": TIER_ACCESSIBLE,
+    "rtx": TIER_ACCESSIBLE,
+    "boeing": TIER_ACCESSIBLE,
+    "lockheed martin": TIER_ACCESSIBLE,
+    "general electric": TIER_ACCESSIBLE,
+    "honeywell": TIER_ACCESSIBLE,
+    "cognizant": TIER_ACCESSIBLE,
+    "infosys": TIER_ACCESSIBLE,
+    "capgemini": TIER_ACCESSIBLE,
+    "dxc technology": TIER_ACCESSIBLE,
+    "innodata": TIER_ACCESSIBLE,
+    "usm business systems": TIER_ACCESSIBLE,
+    "welo global": TIER_ACCESSIBLE,
+    "jobs for humanity": TIER_ACCESSIBLE,
 }
 
 # A match at or above this reads as strong; below the lower bound reads as thin.
@@ -114,14 +176,28 @@ def assign_lane(*, match_score: int, selectivity: int, thin_evidence: bool) -> L
     The rules are legible on purpose -- the operator can see exactly why a
     posting landed where it did, which the honesty principle requires.
     """
-    # Highly selective companies are a reach almost regardless of match: the
-    # bar is the constraint, not the fit.
+    # The two extremes of selectivity decide on their own, because at both ends
+    # the bar is the thing that determines the outcome and the match is not.
+    # These are symmetric on purpose: an earlier version let a highly selective
+    # company mean Reach whatever the evidence, but required a *corroborating*
+    # strong match before calling anything a Safety. The result was that a
+    # title-only posting at an accessible company fell through to "Reach - too
+    # few comparable terms to judge fit", which reads as ambition and is simply
+    # wrong. Selectivity is a fact about the company that holds whether or not
+    # a match could be computed.
     if selectivity >= 4:
         return LaneAssignment(Lane.REACH, selectivity, "Highly selective company")
 
-    # A strong match at a less competitive company is the definition of safety.
-    if selectivity <= 1 and match_score >= STRONG_MATCH and not thin_evidence:
-        return LaneAssignment(Lane.SAFETY, selectivity, "Strong match, less competitive")
+    if selectivity <= 1:
+        if thin_evidence:
+            return LaneAssignment(
+                Lane.SAFETY, selectivity, "Less competitive; too little text to judge fit"
+            )
+        if match_score >= STRONG_MATCH:
+            return LaneAssignment(Lane.SAFETY, selectivity, "Strong match, less competitive")
+        return LaneAssignment(
+            Lane.SAFETY, selectivity, "Less competitive, though the match is weak"
+        )
 
     # A competitive company where the match cannot be trusted is a reach --
     # separating "few comparable terms" from "genuinely weak match", because

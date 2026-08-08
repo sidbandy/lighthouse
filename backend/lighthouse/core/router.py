@@ -244,12 +244,6 @@ def remove_story(story_id: UUID, session: Session = Depends(get_session)) -> Non
     session.commit()
 
 
-@router.get("/corpus/competencies", response_model=list[dict])
-def list_competencies() -> list[dict]:
-    """The competency vocabulary, so the client does not hard-code its own."""
-    return [{"slug": slug, "prompt": prompt} for slug, prompt in corpus_service.COMPETENCIES]
-
-
 @router.post("/corpus/extract", response_model=ExtractionOut)
 async def extract_resume(file: UploadFile = File(...)) -> ExtractionOut:
     """Read a resume PDF into draft facts. **Nothing is saved.**

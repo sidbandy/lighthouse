@@ -85,6 +85,9 @@ export interface Match {
   evidence_basis: string;
   thin_evidence: boolean;
   summary: string;
+  /** Facts in the corpus at scoring time. Zero means the score is an absence of
+   *  data rather than a judgement, and the UI has to say so. */
+  corpus_size: number;
   matched: TermMatch[];
   reword: TermMatch[];
   gaps: TermMatch[];
@@ -104,7 +107,13 @@ export interface ScoredPosting extends PostingSummary {
 export interface LaneBucket {
   lane: "reach" | "target" | "safety";
   weekly_quota: number;
+  /** How many are being returned. */
   count: number;
+  /** How many this lane holds in the slice that was scored. */
+  scored_in_lane: number;
+  /** The lane holds more than it is showing. Without this the list just stops,
+   *  and a cap is indistinguishable from the end of the market. */
+  has_more: boolean;
   postings: ScoredPosting[];
 }
 

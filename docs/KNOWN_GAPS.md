@@ -35,27 +35,42 @@ from scratch later.
 
 ## Entity resolution
 
-### Selectivity seed coverage is thin, and Safety is empty because of it — `misleading`
+### Selectivity seed coverage is still hand-maintained — `misleading`
 
-`SEED_TIERS` is ~40 hand-maintained entries. Genuinely elite firms outside it
-(Five Rings Capital, Radix, most of consulting and banking) get the mid default
-and can appear in Target. Verified live: Five Rings Capital sits in Target at
-selectivity 2.
+`SEED_TIERS` is now ~90 entries covering the companies that actually appear in
+the ingested data, but it remains a hand list. A genuinely elite firm outside it
+gets the mid default and can appear in Target.
 
-Worse than the entry originally recorded: **the Safety lane is structurally
-almost always empty.** `assign_lane` requires `selectivity <= 1` for Safety, and
-only five companies in the seed table sit at that tier (ibm, oracle, cisco,
-dell, accenture). Verified live at the page size the UI actually requests
-(`per_lane=20`): Reach 20, Target 19, Safety 0. The three-lane view is the
-headline Discover surface and it is currently running on two lanes.
+**Fix:** a real pass once Company Intelligence exists — it will have H1B filing
+volumes, posting counts and process data, all of which bear on how hard a company
+is to get into. Expansion, not redesign.
 
-**Fix:** a real selectivity pass once Company Intelligence exists — it will have
-H1B filing volumes, posting counts and process data, all of which bear on how
-hard a company is to get into. The lane thresholds themselves are *not* the
-problem and should not be tuned first: the logic is legible and correct, it is
-being fed a table with almost nothing at the accessible end. Do not tune against
-the current corpus either, which is still a stranger's (see below) — that would
-be fitting to noise.
+### Descriptions skew toward selective companies — `incomplete`
+
+Only Tier 3 (direct ATS boards) carries full descriptions, and the seed list was
+originally all elite and high-tier firms. Measured over a 400-posting scored
+slice: 141 elite, 137 high, 121 mid, **1 accessible**. So the postings the
+operator could evaluate best were the ones they were least likely to get.
+
+Ten mid-tier boards were added and verified live, which helps but does not close
+it: the genuinely accessible end of the market (IBM, the defence primes, the
+large IT services firms) is almost entirely on **Workday**, which is POST-based
+and Akamai-gated and has no connector.
+
+**Fix:** a Workday connector, or Tier 4 aggregators (JobSpy/Indeed) which do
+carry descriptions for those employers. Either is a real piece of work. Until
+then the Safety lane is populated from title-only rows and says so.
+
+### Near-duplicate reqs from one employer crowd a lane — `cosmetic`
+
+Red Bull posts ~730 near-identical "Sales Trainee" rows across locations, and
+dedup correctly keeps them apart — different URLs, different reqs, genuinely
+different jobs. Two of them adjacent in a lane still reads as a bug to anyone
+looking at it.
+
+**Fix:** collapse runs of the same (company, normalised title) into one card
+with a location count, expandable. Do *not* merge them in the data; they are
+separate applications.
 
 ---
 

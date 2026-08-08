@@ -119,6 +119,21 @@ class LaneBucket:
     lane: Lane
     weekly_quota: int
     postings: list[ScoredPosting]
+    # How many this lane holds within the slice that was scored, which is more
+    # than is being shown whenever the lane is capped.
+    scored_in_lane: int = 0
+
+    @property
+    def has_more(self) -> bool:
+        return self.scored_in_lane > len(self.postings)
+
+
+# Scoring is BM25 over every description in the slice, so the slice is the cost.
+# Six pages deep keeps a lane fillable without scoring the whole market to show
+# twenty rows; the ceiling stops a large `per_lane` from turning one request
+# into a full-table scan.
+_SLICE_MULTIPLIER = 6
+_MAX_SCORED_SLICE = 900
 
 
 def three_lane_view(
@@ -131,10 +146,13 @@ def three_lane_view(
     """Split scored postings into reach / target / safety.
 
     Each lane is capped independently so an abundance of safeties cannot crowd
-    the reaches off the screen -- the whole point of separating them.
+    the reaches off the screen -- the whole point of separating them. Each also
+    reports whether it is holding more than it is showing, so the caller can
+    offer to go deeper rather than silently ending the list at the cap.
     """
     # Pull a wider slice than one page so each lane has enough to fill.
-    wide = replace(filters, limit=max(filters.limit, per_lane * 6), offset=0)
+    width = min(max(filters.limit, per_lane * _SLICE_MULTIPLIER), _MAX_SCORED_SLICE)
+    wide = replace(filters, limit=width, offset=0)
     scored = score_postings(session, wide, today=today)
 
     buckets: dict[Lane, list[ScoredPosting]] = {lane: [] for lane in Lane}
@@ -149,6 +167,7 @@ def three_lane_view(
             lane=lane,
             weekly_quota=lanes.WEEKLY_QUOTA[lane],
             postings=buckets[lane][:per_lane],
+            scored_in_lane=len(buckets[lane]),
         )
         for lane in (Lane.REACH, Lane.TARGET, Lane.SAFETY)
     ]
@@ -183,6 +202,7 @@ def match_to_out(result: match.MatchResult) -> MatchOut:
         evidence_basis=result.evidence_basis,
         thin_evidence=result.is_thin_evidence,
         summary=result.summary(),
+        corpus_size=result.corpus_size,
         matched=[_term_out(t) for t in result.matched],
         reword=[_term_out(t) for t in result.wording],
         gaps=[_term_out(t) for t in result.gaps],
@@ -207,6 +227,8 @@ def lane_view_to_out(buckets: list[LaneBucket]) -> list[LaneBucketOut]:
             lane=bucket.lane.value,
             weekly_quota=bucket.weekly_quota,
             count=len(bucket.postings),
+            scored_in_lane=bucket.scored_in_lane,
+            has_more=bucket.has_more,
             postings=[scored_to_out(p) for p in bucket.postings],
         )
         for bucket in buckets

@@ -144,9 +144,13 @@ COMPANY_ALIASES: dict[str, str] = {
     "susquehanna international group": "susquehanna",
     "jpmorgan chase": "jp morgan",
     "jpmorgan": "jp morgan",
+    "jp morgan chase": "jp morgan",
     "goldman sachs group": "goldman sachs",
     "amazon web services": "amazon",
+    "amazon com services": "amazon",
     "aws": "amazon",
+    "rocket lab usa": "rocket lab",
+    "bytedance tiktok": "tiktok",
 }
 
 

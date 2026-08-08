@@ -111,6 +111,11 @@ class MatchOut(BaseModel):
     evidence_basis: str = Field(description="How much the score is worth, in plain words.")
     thin_evidence: bool
     summary: str
+    corpus_size: int = Field(
+        default=0,
+        description="Facts in the corpus at scoring time. Zero means the score is an absence "
+        "of data rather than a judgement, and the UI must say so rather than render a 0.",
+    )
     matched: list[TermMatchOut] = []
     reword: list[TermMatchOut] = Field(
         default=[], description="Experience the corpus has under different wording."
@@ -136,7 +141,15 @@ class LaneBucketOut(BaseModel):
 
     lane: str
     weekly_quota: int
-    count: int
+    count: int = Field(description="How many are being returned.")
+    scored_in_lane: int = Field(
+        default=0, description="How many this lane holds in the slice that was scored."
+    )
+    has_more: bool = Field(
+        default=False,
+        description="The lane is holding more than it is showing. Without this the list "
+        "just stops, and a cap is indistinguishable from the end of the market.",
+    )
     postings: list[ScoredPostingOut]
 
 

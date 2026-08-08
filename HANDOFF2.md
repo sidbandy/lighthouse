@@ -345,6 +345,60 @@ seed table has five companies at that tier. Documented in `KNOWN_GAPS.md`; the
 fix belongs with Company Intelligence, which will have real data. Tuning
 thresholds against a corpus that is still a stranger's would be fitting to noise.
 
+## Second pass — driving it as a first-time user
+
+The audit above was against the spec. This one was against the app: open it
+cold, with an empty corpus, and use every feature. It found more than the spec
+audit did, and all of it was invisible from the code.
+
+**Only 20 of 9,197 applyable postings were reachable.** The three lanes were
+capped at twenty each with no pagination anywhere in the UI, and the list simply
+stopped — indistinguishable from the end of the market. Lanes now report what
+they are holding back (`20 of 118`) and there is a "show more"; the scored slice
+is bounded so a deep page cannot turn into a full-table scan.
+
+**A new user was told they matched nothing.** With an empty corpus every score
+rendered as a confident `0`, and the summary read *"0 terms evidenced, no
+significant gaps"* — reassurance, on a page where the truth was that nothing had
+been compared. A score of 0 against an empty corpus is an absence of data, not a
+verdict, and reporting it as one is exactly the invented claim this project
+refuses to make. The meter renders an em dash, the summary says what is actually
+true, and Discover carries a banner explaining it with a route to fix it.
+
+**The Safety lane could never populate, and the cause was not the threshold.**
+`assign_lane` was asymmetric: `selectivity >= 4` meant Reach on selectivity
+alone, but `selectivity <= 1` demanded a *corroborating* strong match before it
+would call anything a Safety. Since only ~5% of postings carry a description,
+most matches are thin, so a thin match at an accessible company fell through to
+"Reach — too few comparable terms to judge fit". An IBM posting is not a reach
+for anybody. Selectivity is a fact about the company that holds whether or not a
+match could be computed, and both ends now treat it that way.
+
+Underneath that sat a sampling bias worth recording: descriptions come only from
+Tier 3, and the Tier 3 seed list was **entirely elite and high-tier**. Over a
+400-posting scored slice: 141 elite, 137 high, 121 mid, 1 accessible. The
+postings the operator could evaluate best were the ones they were least likely
+to get. Ten mid-tier boards were added, each slug hit live first.
+
+**"15 need attention" in the masthead led nowhere.** A count of broken feeds you
+cannot open is a problem you learn to ignore. It is now a button onto a panel
+that separates "parse looks broken" (row count collapsed, prior data kept) from
+"could not be reached" (usually a board slug that changed), because those need
+different fixes.
+
+**Redundancy removed rather than added.** `POST /api/ingest/run` was a
+synchronous ingest superseded by the background runner — the wrong shape twice
+over, since a run takes a minute and a frozen host would kill it halfway.
+`GET /api/ingest/cycles` duplicated `/api/cycles`. `GET /api/corpus/competencies`
+was mine from earlier in the session and had no consumer.
+
+Two pieces of lane copy were also overclaiming after the logic change: Safety's
+blurb still promised "strong match", and an empty Target said "nothing with the
+current filters" when the real reason was that nothing had enough text to judge.
+
+547 tests. Verified in a browser twice — once cold with an empty corpus, once
+populated — with no console errors and no failed requests.
+
 ## What the next session should pick up
 
 1. **`core/llm.py`** — the Gemini provider layer, with a rule-based fallback on

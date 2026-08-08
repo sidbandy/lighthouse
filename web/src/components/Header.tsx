@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import type { CycleCount, SourceHealth } from "../api/types";
 import { RefreshButton } from "./RefreshButton";
+import { SourcePanel } from "./SourcePanel";
 
 // The masthead: the mark, the live cycle counts (which answer "is there
 // anything worth applying to right now?"), and a quiet source-health indicator.
@@ -30,6 +31,7 @@ const NAV: { to: string; label: string }[] = [
 export function Header({ onRefreshed }: { onRefreshed?: () => void }) {
   const [cycles, setCycles] = useState<CycleCount[]>([]);
   const [health, setHealth] = useState<SourceHealth[]>([]);
+  const [showSources, setShowSources] = useState(false);
   // Cycle counts and the refresh control answer "is there anything worth
   // applying to right now?", which is only a question on Discover.
   const onDiscover = useLocation().pathname.startsWith("/discover");
@@ -91,9 +93,13 @@ export function Header({ onRefreshed }: { onRefreshed?: () => void }) {
 
         {onDiscover && <RefreshButton onFinished={onRefreshed ?? (() => {})} />}
 
-        <div
-          className="flex items-center gap-1.5 text-2xs text-navy-300 shrink-0"
-          title={`${okSources} sources healthy, ${quarantined} with issues`}
+        {/* Clickable, because a count of broken feeds you cannot open is a
+            problem you learn to ignore rather than one you can fix. */}
+        <button
+          onClick={() => setShowSources(true)}
+          className="flex items-center gap-1.5 text-2xs text-navy-300 shrink-0 rounded-md
+                     px-1.5 py-1 hover:text-white hover:bg-white/[0.06] transition-colors"
+          title="Which feeds are working, and which quietly stopped"
         >
           {/* Healthy is deliberately quiet — a white dot, not a green light.
               Only trouble earns the beacon colour. */}
@@ -102,8 +108,10 @@ export function Header({ onRefreshed }: { onRefreshed?: () => void }) {
           />
           {okSources} sources
           {quarantined > 0 && <span className="text-beacon-400">· {quarantined} need attention</span>}
-        </div>
+        </button>
       </div>
+
+      {showSources && <SourcePanel onClose={() => setShowSources(false)} />}
     </header>
   );
 }

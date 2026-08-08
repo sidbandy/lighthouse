@@ -108,7 +108,7 @@ def discover(
         default=False,
         description="Only postings carrying a description, so match scores rest on real evidence.",
     ),
-    per_lane: int = Query(default=15, ge=1, le=50),
+    per_lane: int = Query(default=15, ge=1, le=100),
     today: date | None = None,
 ) -> list[LaneBucketOut]:
     """The three-lane view: reach / target / safety, scored against the corpus.
