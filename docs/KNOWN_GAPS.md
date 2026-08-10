@@ -167,6 +167,43 @@ hide the problem entirely.
 **Until then:** run ingest locally and treat the local database as the source of
 truth, or raise the workflow timeout and accept a long run.
 
+## Schema
+
+### Models and database have drifted on three tables — `incomplete`
+
+Autogenerate proposed, and this session deliberately did not take: NOT NULL on
+`operator_profiles.created_at`/`updated_at` and `operator_targets.created_at`, a
+unique constraint on `operator_profiles.user_id` swapped for a unique index, and
+an index on `postings.role_family`. All real, none of it part of the change that
+surfaced it.
+
+It was left out because a migration that quietly alters unrelated tables is how
+a rollback stops being safe. **Fix:** its own revision, reviewed by hand, with
+the `postings.role_family` index checked against the query plan first — that
+table is large and the index may or may not earn its write cost.
+
+## Networking
+
+### Draft hooks are postings, not specificity hooks — `incomplete`
+
+`drafts._company_hook` lifts "the {title} opening in {location}" from the
+company's most recent posting. It is checkable and true, which is the bar, but
+it is thinner than the spec's §4.5 specificity hooks — a recent launch or an
+engineering blog post is a much better reason to have written.
+
+**Fix:** it becomes a one-line swap once Company Intelligence populates
+`specificity_hooks`. The seam is already there.
+
+### School matching is exact, so "UT Austin" ≠ "University of Texas" — `misleading`
+
+`alumni.is_alumni` compares the strings the operator typed. Two spellings of one
+school will not match, and the contact silently loses its alumni marker.
+
+**Fix:** normalise through a small alias list, the same shape as the company
+aliases. Do **not** fuzzy-match: a wrong "we're alumni" line goes into a real
+message to a real person, which is worse than a missed one the operator can fix
+by editing a field.
+
 ## Data hygiene
 
 ### The seeded corpus is still fake — `incomplete` (data, not code)

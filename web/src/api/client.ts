@@ -9,17 +9,24 @@ import type {
   Board,
   CompanySuggestion,
   Constraints,
+  Contact,
+  ContactInput,
   Corpus,
   Coverage,
   CycleCount,
   DiscoverParams,
+  Draft,
   Extraction,
   Fact,
   FactInput,
+  InteractionKind,
   LaneBucket,
   MajorOptions,
+  NetworkOverview,
   Onboarding,
+  ParsedContact,
   PostingDetail,
+  ReferralReport,
   RefreshStatus,
   ResumeVersion,
   RoleFamily,
@@ -168,6 +175,36 @@ export const api = {
   saveResumeVersion: (version: { label: string; extracted_text?: string; notes?: string }) =>
     send<ResumeVersion>("POST", "/api/resume/versions", version),
   deleteResumeVersion: (id: string) => send<void>("DELETE", `/api/resume/versions/${id}`),
+
+  // --- Network: contacts, cadence, drafts ---
+  contacts: () => get<Contact[]>("/api/network/contacts"),
+  networkOverview: (horizonDays = 7) =>
+    get<NetworkOverview>("/api/network/overview", { horizon_days: horizonDays }),
+  createContact: (contact: ContactInput) =>
+    send<Contact>("POST", "/api/network/contacts", contact),
+  updateContact: (id: string, contact: ContactInput) =>
+    send<Contact>("PATCH", `/api/network/contacts/${id}`, contact),
+  deleteContact: (id: string) => send<void>("DELETE", `/api/network/contacts/${id}`),
+  /** Reads a pasted block into candidates. Saves nothing. */
+  parseContacts: (text: string) =>
+    send<ParsedContact[]>("POST", "/api/network/parse", { text }),
+  createContacts: (contacts: ContactInput[]) =>
+    send<Contact[]>("POST", "/api/network/contacts/bulk", contacts),
+  logInteraction: (
+    contactId: string,
+    interaction: {
+      kind: InteractionKind;
+      summary?: string;
+      channel?: string;
+      direction?: string;
+      occurred_at?: string;
+      application_id?: string;
+    },
+  ) => send<Contact>("POST", `/api/network/contacts/${contactId}/interactions`, interaction),
+  /** Two drafts to choose between. Nothing is sent and nothing is stored. */
+  draftMessages: (contactId: string, kind = "cold_outreach") =>
+    send<Draft[]>("POST", `/api/network/contacts/${contactId}/drafts?kind=${kind}`),
+  referralSplit: () => get<ReferralReport>("/api/network/referrals"),
 
   // --- Ingest ---
   startRefresh: () => send<RefreshStatus>("POST", "/api/ingest/refresh?max_tier=3"),

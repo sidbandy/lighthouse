@@ -6,6 +6,7 @@ import { CorpusPage } from "./components/CorpusPage";
 import { EMPTY_FILTERS, FilterBar, parseStates, type Filters } from "./components/FilterBar";
 import { Header } from "./components/Header";
 import { LaneColumn } from "./components/LaneColumn";
+import { NetworkPage } from "./components/NetworkPage";
 import { PostingDrawer } from "./components/PostingDrawer";
 import { ResumeCheck } from "./components/ResumeCheck";
 import { TrackBoard } from "./components/TrackBoard";
@@ -30,6 +31,15 @@ export default function App() {
             <>
               <Header />
               <TrackBoard />
+            </>
+          }
+        />
+        <Route
+          path="/network"
+          element={
+            <>
+              <Header />
+              <NetworkPage />
             </>
           }
         />

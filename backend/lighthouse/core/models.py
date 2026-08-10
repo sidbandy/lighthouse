@@ -526,6 +526,118 @@ class ResumeVersion(Base):
 
 
 # --------------------------------------------------------------------------
+# Personal: networking
+# --------------------------------------------------------------------------
+
+
+class Contact(Base):
+    """Someone the operator knows, or wants to.
+
+    Names arrive by paste, from LinkedIn's own Alumni tool -- a first-party
+    feature built for exactly this. Nothing is scraped, which is a boundary in
+    code and not a preference: the operator's own account is needed for the
+    search, and losing it would cost more than the automation saves.
+
+    ``school`` is stored per contact rather than inferred, because "we went to
+    the same place" is the one edge a student reliably has, and it has to be a
+    fact they entered rather than a guess.
+    """
+
+    __tablename__ = "contacts"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = _operator_fk()
+
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    company_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("companies.id", ondelete="SET NULL"), index=True
+    )
+    # Kept even when company_id resolves, because the operator pasted it and it
+    # is what they will recognise if entity resolution ever gets it wrong.
+    company_name: Mapped[str | None] = mapped_column(Text)
+    role_title: Mapped[str | None] = mapped_column(Text)
+
+    relationship_type: Mapped[str] = mapped_column(String(30), default="cold", nullable=False)
+    school: Mapped[str | None] = mapped_column(Text)
+    grad_year: Mapped[int | None] = mapped_column(Integer)
+    # 1-5, the operator's own read of how well they know this person. Their
+    # judgement, never computed -- a "relationship strength" derived from
+    # message counts would be exactly the invented number this project refuses.
+    strength: Mapped[int | None] = mapped_column(Integer)
+
+    email: Mapped[str | None] = mapped_column(Text)
+    profile_url: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    interactions: Mapped[list[ContactInteraction]] = relationship(
+        back_populates="contact", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "relationship_type IN ('cold','warm_intro','alumni','met_at_event','referred_by')",
+            name="ck_contact_relationship",
+        ),
+        CheckConstraint(
+            "strength IS NULL OR (strength >= 1 AND strength <= 5)",
+            name="ck_contact_strength",
+        ),
+        Index("ix_contacts_user_company", "user_id", "company_id"),
+    )
+
+
+class ContactInteraction(Base):
+    """One dated exchange with a contact.
+
+    This is the append-only log for networking, the same shape the application
+    board uses -- state is folded from it rather than stored, so the follow-up
+    engine works from real dates and a correction adds a row instead of
+    overwriting one.
+
+    It carries ``summary`` because an interaction has content that a bare state
+    change does not, and that content is the whole difference between a
+    follow-up that gets answered and "just checking in!". A message three weeks
+    after a coffee chat should reference what was actually discussed.
+    """
+
+    __tablename__ = "contact_interactions"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = _operator_fk()
+    contact_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("contacts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Set when this exchange was about a specific application -- a referral ask,
+    # or a thank-you after an interview. It is what lets the funnel separate
+    # referred applications from cold ones.
+    application_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("applications.id", ondelete="SET NULL"), index=True
+    )
+
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    channel: Mapped[str | None] = mapped_column(String(20))
+    direction: Mapped[str] = mapped_column(String(10), default="outbound", nullable=False)
+    summary: Mapped[str] = mapped_column(Text, default="")
+
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    contact: Mapped[Contact] = relationship(back_populates="interactions")
+
+    __table_args__ = (
+        CheckConstraint("direction IN ('outbound','inbound')", name="ck_interaction_direction"),
+        Index("ix_interactions_contact_time", "contact_id", "occurred_at"),
+    )
+
+
+# --------------------------------------------------------------------------
 # Shared: company interview intelligence (populated from Phase 3 onward)
 # --------------------------------------------------------------------------
 

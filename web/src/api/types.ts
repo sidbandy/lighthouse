@@ -582,6 +582,140 @@ export interface Board {
   version_outcomes: VersionOutcome[];
 }
 
+// --- Network: contacts, cadence, drafts ---
+
+export type RelationshipType = "cold" | "warm_intro" | "alumni" | "met_at_event" | "referred_by";
+
+export type InteractionKind =
+  | "outreach"
+  | "reply"
+  | "conversation"
+  | "referral_asked"
+  | "referral_confirmed"
+  | "thank_you"
+  | "note";
+
+export type ContactStage =
+  | "not_contacted"
+  | "awaiting_reply"
+  | "in_conversation"
+  | "referred"
+  | "closed";
+
+export interface Interaction {
+  id: string;
+  kind: InteractionKind;
+  label: string;
+  direction: "inbound" | "outbound";
+  summary: string;
+  channel: string | null;
+  application_id: string | null;
+  occurred_at: string;
+}
+
+/** One thing worth doing, on a real date rather than a priority score. */
+export interface NextStep {
+  action: string;
+  due_on: string;
+  reason: string;
+  draft_kind: string;
+  /** "today", "in 4 days", "3 days late". Pre-rendered — show as-is. */
+  status: string;
+  is_due: boolean;
+}
+
+export interface ContactInput {
+  name: string;
+  company_name?: string | null;
+  role_title?: string | null;
+  relationship_type?: RelationshipType;
+  school?: string | null;
+  grad_year?: number | null;
+  strength?: number | null;
+  email?: string | null;
+  profile_url?: string | null;
+  notes?: string | null;
+}
+
+export interface Contact extends ContactInput {
+  id: string;
+  name: string;
+  company_id: string | null;
+  relationship_type: RelationshipType;
+  is_alumni: boolean;
+  stage: ContactStage;
+  stage_label: string;
+  days_since_outbound: number | null;
+  silence_note: string | null;
+  unanswered_outreach: number;
+  referral_asked: boolean;
+  referral_confirmed: boolean;
+  timeline: Interaction[];
+  next_step: NextStep | null;
+  /** Set when the sequence is finished — why there is nothing more to do. */
+  cadence_note: string;
+}
+
+/** A candidate from a pasted block. No id: nothing has been saved. */
+export interface ParsedContact {
+  name: string;
+  role_title: string | null;
+  company_name: string | null;
+}
+
+export interface CompanyCoverage {
+  company_id: string | null;
+  company_name: string;
+  contact_count: number;
+  alumni_count: number;
+  open_postings: number;
+  is_target: boolean;
+  note: string;
+}
+
+export interface QueueItem {
+  contact_id: string;
+  name: string;
+  company_name: string | null;
+  step: NextStep;
+}
+
+export interface NetworkOverview {
+  school: string | null;
+  total_contacts: number;
+  alumni_contacts: number;
+  note: string;
+  coverage: CompanyCoverage[];
+  queue: QueueItem[];
+}
+
+export interface Draft {
+  variant: string;
+  subject: string;
+  body: string;
+  word_count: number;
+  source_fact_ids: string[];
+  provider: string;
+  /** A template rather than a model. Different things; the operator should know. */
+  is_fallback: boolean;
+  grounding_note: string;
+  warnings: string[];
+}
+
+export interface RouteOutcome {
+  route: string;
+  applied: number;
+  responded: number;
+  statement: string;
+}
+
+export interface ReferralReport {
+  referred: RouteOutcome;
+  cold: RouteOutcome;
+  is_comparable: boolean;
+  note: string;
+}
+
 /** Background ingest state, polled by the refresh control. */
 export interface RefreshStatus {
   is_running: boolean;
