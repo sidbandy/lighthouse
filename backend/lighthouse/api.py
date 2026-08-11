@@ -15,6 +15,8 @@ from .core.router import router as corpus_router
 from .discover.router import router as discover_router
 from .ingest.router import router as ingest_router
 from .network.router import router as network_router
+from .practice.router import router as practice_router
+from .study.router import router as study_router
 from .track.router import router as track_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -39,6 +41,8 @@ app.include_router(corpus_router)
 app.include_router(discover_router)
 app.include_router(ingest_router)
 app.include_router(network_router)
+app.include_router(study_router)
+app.include_router(practice_router)
 app.include_router(track_router)
 
 

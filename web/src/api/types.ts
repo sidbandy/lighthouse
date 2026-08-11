@@ -716,6 +716,160 @@ export interface ReferralReport {
   note: string;
 }
 
+// --- Study ---
+
+export interface StudyResource {
+  label: string;
+  url: string;
+  kind: "practice" | "reading" | "reference" | "course";
+  note: string;
+  is_free: boolean;
+}
+
+export interface PatternRecord {
+  slug: string;
+  name: string;
+  blurb: string;
+  total: number;
+  clean: number;
+  /** Below the sample floor a pattern is not weak, it is unmeasured. */
+  has_enough: boolean;
+  is_weak: boolean;
+  is_untouched: boolean;
+  days_since: number | null;
+  statement: string;
+  resources: StudyResource[];
+}
+
+export interface StudyProblem {
+  slug: string;
+  title: string;
+  difficulty: "easy" | "medium" | "hard";
+  url: string;
+  patterns: string[];
+  is_core: boolean;
+}
+
+export interface Suggestion {
+  problem: StudyProblem;
+  pattern_slug: string;
+  pattern_name: string;
+  reason: string;
+}
+
+export interface Review {
+  problem_slug: string;
+  title: string;
+  url: string;
+  step: number;
+  due_on: string;
+  days_overdue: number;
+  statement: string;
+}
+
+export interface ReviewQueue {
+  due: Review[];
+  upcoming: Review[];
+  total_due: number;
+  was_capped: boolean;
+  note: string;
+}
+
+export interface TopicNeed {
+  slug: string;
+  name: string;
+  blurb: string;
+  application_count: number;
+  total_applications: number;
+  matched_terms: string[];
+  companies: string[];
+  partially_covered: boolean;
+  statement: string;
+  hours_low: number;
+  hours_high: number;
+  resources: StudyResource[];
+}
+
+export interface Curriculum {
+  total_applications: number;
+  note: string;
+  needs: TopicNeed[];
+  /** Terms your applications emphasise that the catalogue does not cover. */
+  uncatalogued: [string, number][];
+}
+
+export interface StudyHome {
+  patterns: PatternRecord[];
+  suggestions: Suggestion[];
+  reviews: ReviewQueue;
+  curriculum: Curriculum;
+  prerequisite_gaps: string[];
+}
+
+export type AttemptOutcome =
+  | "solved_clean"
+  | "solved_with_hint"
+  | "solved_over_time"
+  | "failed";
+
+// --- Practice ---
+
+export interface PracticeQuestion {
+  text: string;
+  competency: string;
+  /** Asked after every answer — the probe people are least ready for. */
+  follow_up: string;
+}
+
+export interface DeliveryMetric {
+  key: string;
+  label: string;
+  value: number;
+  unit: string;
+  ideal: string;
+  verdict: "good" | "watch" | "off";
+  detail: string;
+}
+
+export interface DeliveryReport {
+  duration_sec: number;
+  word_count: number;
+  is_measurable: boolean;
+  summary: string;
+  metrics: DeliveryMetric[];
+  filler_examples: string[];
+}
+
+export interface StructureFinding {
+  part: string;
+  label: string;
+  present: boolean;
+  advice: string;
+}
+
+/** A figure said aloud that the corpus does not support. */
+export interface DriftFinding {
+  claim: string;
+  detail: string;
+}
+
+export interface AnswerFeedback {
+  delivery: DeliveryReport;
+  structure: StructureFinding[];
+  drift: DriftFinding[];
+  notes: string;
+  summary: string;
+  provider: string;
+  is_fallback: boolean;
+}
+
+export interface StoryMatch {
+  story_id: string;
+  title: string;
+  competency_tags: string[];
+  is_grounded: boolean;
+}
+
 /** Background ingest state, polled by the refresh control. */
 export interface RefreshStatus {
   is_running: boolean;

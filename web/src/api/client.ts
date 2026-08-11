@@ -3,9 +3,11 @@
 // fast enough that keeping this simple is the right call.
 
 import type {
+  AnswerFeedback,
   Application,
   ApplicationEvent,
   AtsReport,
+  AttemptOutcome,
   Board,
   CompanySuggestion,
   Constraints,
@@ -25,8 +27,12 @@ import type {
   NetworkOverview,
   Onboarding,
   ParsedContact,
+  PracticeQuestion,
   PostingDetail,
   ReferralReport,
+  StoryMatch,
+  StudyHome,
+  StudyProblem,
   RefreshStatus,
   ResumeVersion,
   RoleFamily,
@@ -205,6 +211,34 @@ export const api = {
   draftMessages: (contactId: string, kind = "cold_outreach") =>
     send<Draft[]>("POST", `/api/network/contacts/${contactId}/drafts?kind=${kind}`),
   referralSplit: () => get<ReferralReport>("/api/network/referrals"),
+
+  // --- Study ---
+  study: () => get<StudyHome>("/api/study"),
+  logAttempt: (attempt: {
+    problem_slug: string;
+    outcome: AttemptOutcome;
+    time_taken_sec?: number;
+    attempted_at?: string;
+    notes?: string;
+  }) => send<StudyHome>("POST", "/api/study/attempts", attempt),
+  patternProblems: (slug: string) => get<StudyProblem[]>(`/api/study/patterns/${slug}/problems`),
+
+  // --- Practice ---
+  practiceQuestion: (competency?: string, exclude?: string[]) =>
+    get<PracticeQuestion>("/api/practice/question", {
+      competency,
+      exclude: exclude?.length ? exclude.join("|") : undefined,
+    }),
+  /** Analyse one spoken answer. Nothing is stored, and no audio ever leaves the browser. */
+  reviewAnswer: (answer: {
+    transcript: string;
+    duration_sec: number;
+    question?: string;
+    competency?: string;
+    words?: { text: string; start: number; end: number }[];
+  }) => send<AnswerFeedback>("POST", "/api/practice/answer", answer),
+  storiesFor: (competency: string) =>
+    get<StoryMatch[]>("/api/practice/question/stories", { competency }),
 
   // --- Ingest ---
   startRefresh: () => send<RefreshStatus>("POST", "/api/ingest/refresh?max_tier=3"),

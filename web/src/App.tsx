@@ -7,8 +7,10 @@ import { EMPTY_FILTERS, FilterBar, parseStates, type Filters } from "./component
 import { Header } from "./components/Header";
 import { LaneColumn } from "./components/LaneColumn";
 import { NetworkPage } from "./components/NetworkPage";
+import { PracticePage } from "./components/PracticePage";
 import { PostingDrawer } from "./components/PostingDrawer";
 import { ResumeCheck } from "./components/ResumeCheck";
+import { StudyPage } from "./components/StudyPage";
 import { TrackBoard } from "./components/TrackBoard";
 
 // Every page has a URL. Not for its own sake: the posting window is the thing
@@ -40,6 +42,24 @@ export default function App() {
             <>
               <Header />
               <NetworkPage />
+            </>
+          }
+        />
+        <Route
+          path="/study"
+          element={
+            <>
+              <Header />
+              <StudyPage />
+            </>
+          }
+        />
+        <Route
+          path="/practice"
+          element={
+            <>
+              <Header />
+              <PracticePage />
             </>
           }
         />

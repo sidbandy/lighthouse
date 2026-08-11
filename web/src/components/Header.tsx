@@ -25,6 +25,8 @@ const NAV: { to: string; label: string }[] = [
   { to: "/discover", label: "Discover" },
   { to: "/applications", label: "Applications" },
   { to: "/network", label: "Network" },
+  { to: "/study", label: "Study" },
+  { to: "/practice", label: "Practice" },
   { to: "/corpus", label: "My corpus" },
   { to: "/resume", label: "Résumé check" },
 ];

@@ -467,12 +467,82 @@ is real and still needs its own revision.
 601 tests. Verified in a browser: paste → review → save, the due queue, drafts
 with their provenance, no console errors.
 
+## Part 5 — Study and Practice
+
+The biggest phase, and the reason a student opens the tool at all.
+
+### Study
+
+Reference data (patterns, problems, topics, resources) is **config, not a
+table** — legible in a diff, versioned with the code, and correctable without a
+migration, which matters because what gets asked changes. 14 patterns, 45
+problems, 11 topics, every resource real and checked.
+
+- **`curriculum.py` is the piece nothing else has.** It reads the postings on
+  your own board, subtracts what your corpus evidences, and returns the topics
+  your applications actually ask for — with the count attached ("1 of your 2
+  applications asks for this, at Rocket Lab"), the exact words that triggered it,
+  and where to go and learn it. Discover found the roles, Track recorded which
+  ones you sent, the corpus knows what you can back up, and the difference is a
+  study plan nobody wrote.
+- **`attempts.py`** substitutes the spec's mastery score with the record itself.
+  "0 of 3 clean, last 4 days ago" tells you what to do; "graph mastery 0.34"
+  invites you to trust a number fitted to three points. Below three attempts a
+  pattern is *unmeasured*, not weak — different problems, different answers.
+  Prerequisite gaps are surfaced: attempting DP with nothing logged for
+  backtracking has a different fix from just being bad at DP.
+- **`srs.py`** is SM-2, with everything interesting in the part that survives a
+  missed week: no growing overdue counter ever, a hard daily cap, and ordering
+  by *decay ratio* rather than by how overdue something is — a one-day interval
+  three days late has lost more than a ninety-day interval three days late.
+  Reviews derive from the attempt log rather than a second table that could
+  disagree with it.
+- **`company_delta.py`** holds the thesis sentence, with counts on both sides.
+  `reported_questions` is still empty, so it reports `coverage_quality: none`
+  and says so rather than inventing a distribution. Company Intelligence fills
+  it.
+
+### Practice
+
+- **`delivery.py` never touches a model.** Filler density, pace, length, long
+  pauses — arithmetic over a transcript, so it works offline and is identical
+  every run, which is what makes a trend across six sessions mean anything.
+  Every threshold is a stated convention with its reason beside it.
+- **`feedback.py`** adds structure (STAR, with a missing Result called out — the
+  most common and costliest failure) and **drift**: figures said aloud that the
+  corpus does not contain. "I led a team of 9" against a corpus saying 3 is
+  caught. A model that introduces a figure the sources do not support has its
+  output discarded in favour of the deterministic note.
+- The voice loop is the browser's own speech engine, both directions. No audio
+  leaves the machine, nothing is recorded, and the transcript is not stored.
+
+### Defects found by running it
+
+| Defect | Consequence |
+|---|---|
+| A route handler called another route handler | `Query(default=6)` arrives as the raw `Query` object, so the first comparison raised. `POST /api/study/attempts` returned 500 — surfacing in the browser as a **CORS error**, which points at entirely the wrong thing. Every unit test passed and the type checker was happy |
+| "training" triggered ML fundamentals | In an aerospace posting that means employee training. A recommendation fired by a coincidence is a wrong recommendation, so the ambiguous single-word triggers were replaced with specific phrases |
+| Two clocks on one page | The pattern record said "last 4 days ago" and the suggestion built from it said 5, because `next_problems` did not take `today` |
+| Filler examples showed the rarest first | "um ×7" is the one worth knowing about and it was buried under a single "basically" |
+| Typed answers reported "too short to measure" | There is no duration for typed text. That reads as "you spoke too briefly" — a judgement about something that never happened |
+
+`test_api_smoke.py` exists because of the first one: one request per endpoint,
+asserting it answers at all. Pure-function tests cannot see wiring faults, and
+that whole family of bug reaches the browser before anything else catches it.
+
+704 tests. Both pages driven in a browser, including logging an attempt and
+watching the page re-derive.
+
 ## What the next session should pick up
 
-1. **Company & job intelligence.** Cycle-open timing first: it needs no LLM and
-   no new source, just a query over `posted_at` grouped by company × term × role
+1. **Company & job intelligence.** Cycle-open timing first: no LLM, no new
+   source, just a query over `posted_at` grouped by company × term × role
    family. Then H1B/LCA for real sponsorship and pay bands, then the reports
-   pipeline. It also upgrades Networking's draft hooks from "a posting on their
-   board" to real specificity hooks.
-2. **Study & Practice** — the biggest thing in the project.
-3. The schema drift above, in its own migration.
+   pipeline — which is also what fills `reported_questions` and turns
+   `company_delta` from an honest empty state into the thesis sentence.
+   It also upgrades Networking's draft hooks to real specificity hooks.
+2. **Part 6 — the weekly briefing and day-of kit.** Every input it needs now
+   exists except company intelligence.
+3. The schema drift noted above, in its own migration.
+4. Technical mocks and the sandboxed runner, which the spec sequences last and
+   deliberately isolated.

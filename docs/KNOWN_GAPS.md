@@ -204,6 +204,42 @@ aliases. Do **not** fuzzy-match: a wrong "we're alumni" line goes into a real
 message to a real person, which is worse than a missed one the operator can fix
 by editing a field.
 
+## Study and practice
+
+### `reported_questions` is empty, so the company delta has nothing to say — `incomplete`
+
+The table, the recency weighting and the leverage sentence all exist and are
+tested. There are no rows, so `company_delta` returns `coverage_quality: none`
+and says so — which is correct behaviour, not a bug, but it means the "core
+layer plus company delta" structure is currently core layer only.
+
+**Fix:** Company Intelligence's population pipeline (Reddit + LeetCode through
+the operator review queue). Nothing in this module changes when the data
+arrives; it is already reading the table.
+
+### The problem catalogue is 45 problems, hand-maintained — `incomplete`
+
+Enough to enter every pattern and to drive the SRS, not enough for months of
+practice. Deliberate — a list of four hundred is a list nobody starts — but a
+serious user will exhaust a pattern's catalogued problems and see it drop out of
+the suggestions.
+
+**Fix:** widen it per pattern as the gap shows up, or link out to the full
+NeetCode list per pattern once exhausted. Do not bulk-import a thousand problems;
+the small curated set is the feature.
+
+### Topic triggers are substring matches — `misleading`
+
+`curriculum` matches trigger phrases against the posting text. Specific phrases
+were chosen after a live run showed "training" in an aerospace posting
+recommending an ML course, and there is a test pinning the ambiguous words out.
+It is still substring matching, so a posting saying "no system design experience
+required" would count as asking for system design.
+
+**Fix:** if it bites, check for a negation window before the match. Do not
+switch to a model for this — the current rule is legible and its failures are
+inspectable, which a classifier's would not be.
+
 ## Data hygiene
 
 ### The seeded corpus is still fake — `incomplete` (data, not code)
