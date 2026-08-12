@@ -320,9 +320,21 @@ def get_coverage(
 
     Every number is an observed count over the stated sample of postings that
     carry a real description. Nothing here is predicted or fitted.
+
+    With no explicit filter, this measures against **the operator's own target
+    role families**, seeded from their major. Measuring a designer's corpus
+    against the whole market told them their biggest gaps were C++ and
+    electrical engineering, which is true, useless, and the exact failure the
+    "works for any major" claim has to avoid. Passing ``role_family`` overrides
+    it, and an operator with no profile still gets the whole market.
     """
+    families = tuple(sorted(set(role_family)))
+    if not families:
+        profile = onboarding_service.load_profile(session)
+        families = tuple(sorted(getattr(profile, "target_role_families", None) or []))
+
     report = coverage_service.corpus_coverage(
-        session, role_families=tuple(sorted(set(role_family))), gap_limit=gap_limit
+        session, role_families=families, gap_limit=gap_limit
     )
     return CoverageOut(
         sample_size=report.sample_size,

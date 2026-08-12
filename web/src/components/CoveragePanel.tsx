@@ -16,8 +16,8 @@ export function CoveragePanel({
   onRoleFilter,
 }: {
   coverage: Coverage;
-  roleFilter: RoleFamily | null;
-  onRoleFilter: (role: RoleFamily | null) => void;
+  roleFilter: RoleFamily | "all" | null;
+  onRoleFilter: (role: RoleFamily | "all" | null) => void;
 }) {
   const { sample_size, reached, unreached, gaps, is_meaningful } = coverage;
 
@@ -30,9 +30,22 @@ export function CoveragePanel({
         </div>
         <div className="flex items-center gap-1 flex-wrap justify-end">
           <span className="text-2xs text-navy-400 mr-1">measure against</span>
+          {/* The default measures against the operator's own field, seeded
+              from their major. Measuring a designer against the whole market
+              said their biggest gaps were C++ and electrical engineering —
+              true, useless, and exactly what "works for any major" has to
+              avoid. The escape hatch is explicit rather than the default. */}
           <button
             onClick={() => onRoleFilter(null)}
+            title="The role families from your major, set on this page"
             className={roleFilter === null ? "btn-filter-on text-2xs" : "btn-filter text-2xs"}
+          >
+            Your field
+          </button>
+          <button
+            onClick={() => onRoleFilter("all")}
+            title="Every posting with a description, whatever the field"
+            className={roleFilter === "all" ? "btn-filter-on text-2xs" : "btn-filter text-2xs"}
           >
             All roles
           </button>

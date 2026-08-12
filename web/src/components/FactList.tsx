@@ -201,11 +201,25 @@ function Contribution({
 }) {
   const { reach, unique_reach, terms, unmatched_term_count } = contribution;
 
+  // Two very different situations produce a reach of zero, and collapsing them
+  // into one sentence is what makes a new user conclude the tool is broken.
+  // Either the fact names skills nobody is asking for — their problem is the
+  // market — or it names no skills at all, and the fix is one edit away.
   if (terms.length === 0) {
     return (
-      <p className="text-2xs text-navy-400 mt-2">
-        No term here matches anything in the {sampleSize} postings sampled.
-        {unmatched_term_count > 0 && " That may just mean your field isn't well covered yet."}
+      <p className="text-2xs text-navy-400 mt-2 leading-relaxed">
+        {unmatched_term_count > 0 ? (
+          <>
+            Its terms don't appear in the {sampleSize} postings sampled. That can just mean
+            this slice of the market doesn't ask for them — try measuring against a different
+            field above.
+          </>
+        ) : (
+          <>
+            This doesn't name anything concrete yet, so there is nothing to match on. Add the
+            tools, languages or methods you actually used and it will start counting.
+          </>
+        )}
       </p>
     );
   }

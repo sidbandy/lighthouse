@@ -142,6 +142,10 @@ class CorpusCoverage:
     reached: int = 0
     # Terms the market emphasises that no fact evidences, most demanded first.
     gaps: list[TermDemand] = field(default_factory=list)
+    # Which slice of the market this was measured against. Empty means all of
+    # it, which is only the right comparison for someone whose field the
+    # description-bearing postings actually cover.
+    role_families: tuple[str, ...] = ()
 
     @property
     def unreached(self) -> int:
@@ -151,7 +155,14 @@ class CorpusCoverage:
         """The sample, stated plainly. Shown next to every number above."""
         if self.sample_size == 0:
             return "No postings with descriptions have been ingested yet."
-        basis = f"Counted across {self.sample_size} postings that carry a full description."
+        scope = (
+            " in " + ", ".join(sorted(self.role_families))
+            if self.role_families
+            else ""
+        )
+        basis = (
+            f"Counted across {self.sample_size} postings{scope} that carry a full description."
+        )
         if not self.is_meaningful:
             basis += " That is a small sample — treat these counts as indicative only."
         return basis
@@ -304,4 +315,6 @@ def corpus_coverage(
     from ..core.corpus import list_facts
 
     facts = list_facts(session, user_id=user_id)
-    return analyse(facts, market_index(session, role_families), gap_limit=gap_limit)
+    report = analyse(facts, market_index(session, role_families), gap_limit=gap_limit)
+    report.role_families = role_families
+    return report

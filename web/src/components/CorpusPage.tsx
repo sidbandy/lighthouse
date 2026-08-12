@@ -10,6 +10,7 @@ import type {
   RoleFamily,
 } from "../api/types";
 import { CoveragePanel } from "./CoveragePanel";
+import { ROLES } from "./FilterBar";
 import { FactEditor } from "./FactEditor";
 import { FactList } from "./FactList";
 import { ResumeImport } from "./ResumeImport";
@@ -45,11 +46,17 @@ const STEP_COPY: Record<OnboardingStep, { title: string; detail: string }> = {
   complete: { title: "Setup complete", detail: "" },
 };
 
+// Every family, for the explicit "all roles" request. Sending the full list
+// rather than adding a query param keeps the API surface as it is.
+const ALL_ROLES: RoleFamily[] = [...ROLES, "other"];
+
 export function CorpusPage() {
   const [corpus, setCorpus] = useState<Corpus | null>(null);
   const [coverage, setCoverage] = useState<Coverage | null>(null);
   const [onboarding, setOnboarding] = useState<Onboarding | null>(null);
-  const [roleFilter, setRoleFilter] = useState<RoleFamily | null>(null);
+  // null = the operator's own field (the server reads it from their profile);
+  // "all" = the whole market, asked for explicitly.
+  const [roleFilter, setRoleFilter] = useState<RoleFamily | "all" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -64,7 +71,11 @@ export function CorpusPage() {
   }, []);
 
   const loadCoverage = useCallback(async () => {
-    setCoverage(await api.coverage(roleFilter ? [roleFilter] : undefined));
+    setCoverage(
+      await api.coverage(
+        roleFilter === null ? undefined : roleFilter === "all" ? ALL_ROLES : [roleFilter],
+      ),
+    );
   }, [roleFilter]);
 
   useEffect(() => {
