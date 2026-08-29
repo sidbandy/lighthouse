@@ -182,7 +182,10 @@ class Posting(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_title: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     url: Mapped[str] = mapped_column(Text, nullable=False)
-    canonical_url: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    # Unique: this is the posting's identity, and the ingest upsert arbitrates
+    # on it. Two rows sharing one canonical URL would split a posting's
+    # sightings across both.
+    canonical_url: Mapped[str] = mapped_column(Text, nullable=False, unique=True, index=True)
 
     # Identity-bearing ATS job id (e.g. Greenhouse gh_jid). When two candidate
     # rows disagree here they are different roles, full stop -- this is an

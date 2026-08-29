@@ -14,10 +14,13 @@ more than throughput:
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
-from sqlalchemy import select, tuple_, update
+from sqlalchemy import bindparam as sa_bindparam
+from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from ..core.models import Company, OperatorTarget, Posting, PostingSource, SourceHealth
@@ -35,6 +38,11 @@ from .seasons import is_applyable
 from .terms import resolve_term
 
 logger = logging.getLogger(__name__)
+
+# How many rows go into one INSERT. Large enough that the round trips stop
+# mattering, small enough to stay well inside Postgres' 65535 bind-parameter
+# limit: a posting row binds ~25 columns, so 500 rows is ~12.5k parameters.
+WRITE_CHUNK = 500
 
 # A run returning less than this fraction of the previous run's rows is treated
 # as a broken parse rather than as genuine attrition.
@@ -62,6 +70,9 @@ class IngestReport:
     created: int = 0
     updated: int = 0
     skipped_not_applyable: int = 0
+    # Two merged postings claiming one canonical URL. Always a dedup bug, so it
+    # is counted and reported rather than quietly absorbed by the upsert.
+    collapsed_in_batch: int = 0
     term_rules: dict[str, int] = field(default_factory=dict)
 
     @property
@@ -70,10 +81,16 @@ class IngestReport:
 
     def summary(self) -> str:
         ok = sum(1 for s in self.sources if s.ok)
-        return (
+        line = (
             f"{ok}/{len(self.sources)} sources ok; {self.raw_count} raw -> "
             f"{self.merged_count} deduped; {self.created} new, {self.updated} updated"
         )
+        # Only ever non-zero when dedup let two postings claim one canonical
+        # URL, so it stays out of the line entirely rather than reading as a
+        # normal statistic that happens to be zero.
+        if self.collapsed_in_batch:
+            line += f"; {self.collapsed_in_batch} collapsed (dedup let duplicates through)"
+        return line
 
 
 def fetch_source(connector: Connector, session: Session) -> tuple[list[RawPosting], SourceResult]:
@@ -181,32 +198,229 @@ def reconcile_companies(session: Session) -> int:
     return merged_away
 
 
-def _get_or_create_company(session: Session, merged: MergedPosting, cache: dict) -> Company:
-    key = merged.primary.canonical_company_name
-    if key in cache:
-        return cache[key]
+def _chunks(rows: list, size: int = WRITE_CHUNK):
+    for i in range(0, len(rows), size):
+        yield rows[i : i + size]
 
-    company = session.scalar(select(Company).where(Company.canonical_name == key))
-    if company is None:
-        company = Company(
-            name=merged.company_name,
-            canonical_name=key,
-            ats_vendor=merged.ats_vendor,
+
+def _resolve_companies(
+    session: Session, merged_postings: list[MergedPosting]
+) -> dict[str, uuid.UUID]:
+    """Map every canonical company name in the batch to a company id.
+
+    One SELECT for the whole batch and one INSERT for the ones that are new,
+    rather than a lookup per posting. Names repeat heavily -- 23k postings come
+    from ~4.8k companies -- so this collapses by roughly five to one before it
+    touches the database at all.
+    """
+    wanted: dict[str, MergedPosting] = {}
+    for merged in merged_postings:
+        wanted.setdefault(merged.primary.canonical_company_name, merged)
+    if not wanted:
+        return {}
+
+    ids: dict[str, uuid.UUID] = {}
+    vendors: dict[str, str | None] = {}
+    for chunk in _chunks(list(wanted), WRITE_CHUNK):
+        for company_id, canonical, vendor in session.execute(
+            select(Company.id, Company.canonical_name, Company.ats_vendor).where(
+                Company.canonical_name.in_(chunk)
+            )
+        ):
+            ids[canonical] = company_id
+            vendors[canonical] = vendor
+
+    new_rows = [
+        {
+            "name": merged.company_name,
+            "canonical_name": key,
+            "ats_vendor": merged.ats_vendor,
+        }
+        for key, merged in wanted.items()
+        if key not in ids
+    ]
+    for chunk in _chunks(new_rows, WRITE_CHUNK):
+        for company_id, canonical in session.execute(
+            pg_insert(Company)
+            .values(chunk)
+            .on_conflict_do_nothing(index_elements=["canonical_name"])
+            .returning(Company.id, Company.canonical_name)
+        ):
+            ids[canonical] = company_id
+
+    # A concurrent run could have inserted a name between the SELECT and the
+    # INSERT, in which case ON CONFLICT DO NOTHING returns nothing for it.
+    missing = [key for key in wanted if key not in ids]
+    if missing:
+        for chunk in _chunks(missing, WRITE_CHUNK):
+            for company_id, canonical in session.execute(
+                select(Company.id, Company.canonical_name).where(
+                    Company.canonical_name.in_(chunk)
+                )
+            ):
+                ids[canonical] = company_id
+
+    # Backfill a vendor onto a company first seen without one. Only where it is
+    # currently null, so a known vendor is never overwritten by a feed that
+    # happens not to carry it.
+    # Only companies that already existed: one inserted a moment ago carried
+    # its vendor in. `vendors` holds a key only for rows read by the SELECT,
+    # which is exactly that set.
+    backfill = [
+        {"b_id": ids[key], "b_vendor": merged.ats_vendor}
+        for key, merged in wanted.items()
+        if merged.ats_vendor and key in vendors and not vendors[key]
+    ]
+    companies = Company.__table__
+    for chunk in _chunks(backfill, WRITE_CHUNK):
+        # Core table, not the ORM entity: an executemany against the entity is
+        # read as a bulk update by primary key, which these rows are not.
+        session.execute(
+            update(companies)
+            .where(companies.c.id == sa_bindparam("b_id"), companies.c.ats_vendor.is_(None))
+            .values(ats_vendor=sa_bindparam("b_vendor")),
+            chunk,
         )
-        session.add(company)
-        session.flush()
-    elif merged.ats_vendor and not company.ats_vendor:
-        company.ats_vendor = merged.ats_vendor
 
-    cache[key] = company
-    return company
+    return ids
+
+
+def _posting_row(
+    merged: MergedPosting, resolution, company_id: uuid.UUID, seen_at: datetime
+) -> dict:
+    """One posting as a plain dict, ready for a bulk upsert."""
+    return {
+        "company_id": company_id,
+        "title": merged.title,
+        "normalized_title": merged.primary.normalized_title_value,
+        "url": merged.url,
+        "canonical_url": merged.canonical_url,
+        "ats_job_id": merged.ats_job_id,
+        "description": merged.description,
+        "description_available": merged.description is not None,
+        "season": resolution.cycle.season if resolution.cycle else None,
+        "term_year": resolution.cycle.year if resolution.cycle else None,
+        "term_rule": resolution.rule,
+        "term_evidence": resolution.evidence,
+        "employment_type": classify_employment_type(merged.title, merged.employment_hint),
+        # Store the plain value (lowercase); role_family is a string column now.
+        "role_family": classify_role_family(merged.title).value,
+        "sponsorship": parse_sponsorship(merged.sponsorship_raw),
+        "locations": merged.locations,
+        "location_labels": merged.location_labels,
+        "is_remote": merged.is_remote,
+        "is_active": merged.is_active,
+        "posted_at": merged.posted_at,
+        "source_updated_at": merged.updated_at,
+        "last_seen_at": seen_at,
+    }
+
+
+# Every column the upsert refreshes on an existing row. `canonical_url` is the
+# arbiter and `company_id` is deliberately included: a posting can move between
+# companies when name resolution improves.
+_POSTING_UPDATE_COLUMNS = (
+    "company_id",
+    "title",
+    "normalized_title",
+    "url",
+    "ats_job_id",
+    "description",
+    "description_available",
+    "season",
+    "term_year",
+    "term_rule",
+    "term_evidence",
+    "employment_type",
+    "role_family",
+    "sponsorship",
+    "locations",
+    "location_labels",
+    "is_remote",
+    "is_active",
+    "posted_at",
+    "source_updated_at",
+    "last_seen_at",
+)
+
+
+def _upsert_postings(session: Session, rows: list[dict]) -> dict[str, uuid.UUID]:
+    """Bulk upsert on canonical_url, returning the id for every row written."""
+    ids: dict[str, uuid.UUID] = {}
+    for chunk in _chunks(rows, WRITE_CHUNK):
+        statement = pg_insert(Posting).values(chunk)
+        statement = statement.on_conflict_do_update(
+            index_elements=["canonical_url"],
+            set_={name: statement.excluded[name] for name in _POSTING_UPDATE_COLUMNS},
+        ).returning(Posting.id, Posting.canonical_url)
+        for posting_id, canonical_url in session.execute(statement):
+            ids[canonical_url] = posting_id
+    return ids
+
+
+def _record_all_sources(
+    session: Session,
+    merged_postings: list[MergedPosting],
+    posting_ids: dict[str, uuid.UUID],
+) -> None:
+    """Attach provenance rows for the whole batch, one per source sighting.
+
+    A raw upstream row is one sighting and belongs to exactly one posting,
+    which is what ``uq_source_fingerprint`` enforces. That constraint is also
+    what makes this a single upsert: whenever dedup regroups a row onto a
+    different canonical posting -- which happens any time matching improves --
+    the conflict branch re-points the existing sighting rather than inserting a
+    second one.
+
+    ``raw`` is intentionally not refreshed on conflict. It is the payload as
+    first seen, and the row is unchanged by definition when the fingerprint
+    matches.
+    """
+    rows: dict[tuple[str, str], dict] = {}
+    for merged in merged_postings:
+        posting_id = posting_ids.get(merged.canonical_url)
+        if posting_id is None:
+            continue
+        for member in merged.members:
+            # Last writer wins within a batch. Two merged postings claiming one
+            # sighting would be a dedup bug, and Postgres rejects a statement
+            # that touches the same conflict target twice, so collapse here.
+            rows[(member.source_id, member.fingerprint)] = {
+                "posting_id": posting_id,
+                "source_id": member.source_id,
+                "source_url": member.url,
+                "source_fingerprint": member.fingerprint,
+                "raw": member.raw,
+            }
+
+    for chunk in _chunks(list(rows.values()), WRITE_CHUNK):
+        statement = pg_insert(PostingSource).values(chunk)
+        session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_source_fingerprint",
+                set_={
+                    "posting_id": statement.excluded.posting_id,
+                    "source_url": statement.excluded.source_url,
+                },
+            )
+        )
 
 
 def persist(session: Session, merged_postings: list[MergedPosting], today: date) -> IngestReport:
-    """Upsert deduplicated postings, keyed on canonical URL."""
-    report = IngestReport(started_at=datetime.now(UTC))
-    company_cache: dict[str, Company] = {}
+    """Upsert deduplicated postings, keyed on canonical URL.
 
+    Written in phases rather than a loop because the loop cost four statements
+    per posting -- a company lookup, a posting SELECT, a flush, and a sightings
+    SELECT. At 23k postings that is ~98k round trips, which is fine locally and
+    took over twenty minutes against a network database, against a thirty
+    minute CI timeout. The phases below issue a bounded number of statements
+    regardless of batch size.
+    """
+    report = IngestReport(started_at=datetime.now(UTC))
+
+    # Phase 1: resolve terms and drop cycles that have already started. Pure,
+    # no database, so the filtering is done before anything is written.
+    resolved: list[tuple[MergedPosting, object]] = []
     for merged in merged_postings:
         resolution = resolve_term(
             title=merged.title,
@@ -219,86 +433,48 @@ def persist(session: Session, merged_postings: list[MergedPosting], today: date)
         if not is_applyable(resolution.cycle, today):
             report.skipped_not_applyable += 1
             continue
-
-        company = _get_or_create_company(session, merged, company_cache)
-        posting = session.scalar(
-            select(Posting).where(Posting.canonical_url == merged.canonical_url)
-        )
-        is_new = posting is None
-        if is_new:
-            posting = Posting(canonical_url=merged.canonical_url, company_id=company.id)
-            session.add(posting)
-
-        posting.company_id = company.id
-        posting.title = merged.title
-        posting.normalized_title = merged.primary.normalized_title_value
-        posting.url = merged.url
-        posting.ats_job_id = merged.ats_job_id
-        posting.description = merged.description
-        posting.description_available = merged.description is not None
-        posting.season = resolution.cycle.season if resolution.cycle else None
-        posting.term_year = resolution.cycle.year if resolution.cycle else None
-        posting.term_rule = resolution.rule
-        posting.term_evidence = resolution.evidence
-        posting.employment_type = classify_employment_type(merged.title, merged.employment_hint)
-        # Store the plain value (lowercase); role_family is a string column now.
-        posting.role_family = classify_role_family(merged.title).value
-        posting.sponsorship = parse_sponsorship(merged.sponsorship_raw)
-        posting.locations = merged.locations
-        posting.location_labels = merged.location_labels
-        posting.is_remote = merged.is_remote
-        posting.is_active = merged.is_active
-        posting.posted_at = merged.posted_at
-        posting.source_updated_at = merged.updated_at
-        posting.last_seen_at = datetime.now(UTC)
-        session.flush()
-
-        _record_sources(session, posting, merged)
-        report.created += int(is_new)
-        report.updated += int(not is_new)
+        resolved.append((merged, resolution))
 
     report.merged_count = len(merged_postings)
-    report.finished_at = datetime.now(UTC)
-    return report
+    if not resolved:
+        report.finished_at = datetime.now(UTC)
+        return report
 
+    # Phase 2: one company id per distinct name in the batch.
+    company_ids = _resolve_companies(session, [m for m, _ in resolved])
 
-def _record_sources(session: Session, posting: Posting, merged: MergedPosting) -> None:
-    """Attach provenance rows, one per source sighting.
-
-    A raw upstream row is one sighting and belongs to exactly one posting,
-    which is what ``uq_source_fingerprint`` enforces. The lookup is therefore
-    global rather than per-posting: whenever dedup regroups a row onto a
-    different canonical posting -- which happens any time matching improves --
-    the existing sighting is re-pointed rather than inserted a second time.
-    """
-    if not merged.members:
-        return
-
-    keys = {(m.source_id, m.fingerprint) for m in merged.members}
-    existing = {
-        (s.source_id, s.source_fingerprint): s
-        for s in session.scalars(
-            select(PostingSource).where(
-                tuple_(PostingSource.source_id, PostingSource.source_fingerprint).in_(keys)
+    # Phase 3: which canonical URLs already exist, so created and updated stay
+    # accurate. Read before the upsert, because afterwards every row exists.
+    urls = [m.canonical_url for m, _ in resolved]
+    known: set[str] = set()
+    for chunk in _chunks(urls, WRITE_CHUNK):
+        known.update(
+            session.scalars(
+                select(Posting.canonical_url).where(Posting.canonical_url.in_(chunk))
             )
         )
-    }
 
-    for member in merged.members:
-        sighting = existing.get((member.source_id, member.fingerprint))
-        if sighting is None:
-            session.add(
-                PostingSource(
-                    posting_id=posting.id,
-                    source_id=member.source_id,
-                    source_url=member.url,
-                    source_fingerprint=member.fingerprint,
-                    raw=member.raw,
-                )
-            )
-        elif sighting.posting_id != posting.id:
-            sighting.posting_id = posting.id
-            sighting.source_url = member.url
+    seen_at = datetime.now(UTC)
+    rows: dict[str, dict] = {}
+    for merged, resolution in resolved:
+        # Deduplicate within the batch: Postgres refuses a statement whose
+        # ON CONFLICT target is hit twice. Dedup should have prevented this,
+        # so it is counted rather than silently absorbed.
+        if merged.canonical_url in rows:
+            report.collapsed_in_batch += 1
+        rows[merged.canonical_url] = _posting_row(
+            merged, resolution, company_ids[merged.primary.canonical_company_name], seen_at
+        )
+
+    report.created = sum(1 for url in rows if url not in known)
+    report.updated = len(rows) - report.created
+
+    # Phase 4 and 5: write the postings, then their provenance.
+    posting_ids = _upsert_postings(session, list(rows.values()))
+    _record_all_sources(session, [m for m, _ in resolved], posting_ids)
+
+    report.finished_at = datetime.now(UTC)
+    return report
 
 
 def run_ingest(
