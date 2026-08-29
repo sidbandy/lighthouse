@@ -48,13 +48,17 @@ furthest.
 
 ---
 
+**Progress, 29 Aug 2026.** M0 done. M1.1 and M1.2 done; M1.3 is the operator's
+to do and everything downstream of real data waits on it. M2.1 done. M2.2 was a
+misdiagnosis and is struck through below. Everything else stands as written.
+
 # 1. Milestone map
 
 | ID | Milestone | Window | Est. | Blocks |
 |---|---|---|---|---|
-| M0 | De-risk | now | 1h | everything |
-| M1 | Turn it on for real | A | 2d | every personal feature |
-| M2 | Freshness, coverage, alerts | A | 5d | the apply loop |
+| M0 | De-risk | now | 1h | **done** |
+| M1 | Turn it on for real | A | 2d | **M1.1/M1.2 done; M1.3 blocked on the operator** |
+| M2 | Freshness, coverage, alerts | A | 5d | **M2.1 done**; M2.3 next |
 | M3 | Commit and wire Part 6 | A | 2d | nothing, but it's at risk |
 | M4 | Part 3, Company Intelligence | B | 15–20d | eleven downstream features |
 | M5 | Track and Network completions | A/B | 5d | |
@@ -86,6 +90,11 @@ uncommitted files in `briefing/` exist nowhere but that laptop's working tree.
 3. Confirm `origin/main` matches local. `git log origin/main..main` should be empty
 
 **Exit criteria.** Nothing that exists is unbacked.
+
+**Done, 29 Aug 2026.** Nine commits on `origin/main`, working tree clean, no
+untracked files. Part 6's service layer and the practice-audio work were
+committed as they stood; committing is not wiring, and M3 still owes the
+router, schemas, tests and page.
 
 ---
 
@@ -170,12 +179,31 @@ because health is per-source and the timeout kills the job.
   the worst kind of failure this product can have
 - Target under five minutes for a full run
 
-## M2.2 Wire `coverage.invalidate_cache()`
+**Done, 29 Aug 2026.** Writes were measured at 4.2 statements per posting, which
+projects to 24 minutes at 15ms RTT across 23,268 postings -- against a 30-minute
+timeout. Now 0.01 per posting: 5,000 postings in 32 statements. Backed by 17
+characterization tests written against the old implementation first, a
+differential harness that compared 22 columns per row across 1,678 real postings
+on both the insert and update paths, and a live replay. That work also found a
+latent crash: one feed listing the same job twice raised `UniqueViolation` and
+aborted an entire run. `ingest_runs` records every run, and a killed one stays
+visibly unfinished -- verified by SIGKILLing a real run. `lighthouse.cli runs`
+reads it, and the workflow opens an issue on failure.
 
-`discover/coverage.py:301` has no caller. The market index behind `/api/corpus/coverage`
-is never dropped after an ingest, so coverage and gap demand counts go stale against a
-refreshed posting table until the process restarts. `ranking.invalidate_cache()` is wired
-and this one is not. Call both from the same place the ingest run completes.
+The fetch side is untouched and now dominates; see `docs/KNOWN_GAPS.md`.
+
+## ~~M2.2 Wire `coverage.invalidate_cache()`~~ — misdiagnosed, nothing to fix
+
+**This was wrong, and inherited from HANDOFF3 P0-2.** The market index does not go
+stale after an ingest. `_MarketCache` keys on the posting count and
+`max(last_seen_at)`, and `pipeline.py` bumps `last_seen_at` on every re-sighting,
+so any ingest moves the key and the index rebuilds itself. **No wrong number was
+ever produced.**
+
+What was real was documentation: a zero-caller function whose docstring claimed
+"used by tests and after an ingest run", and a `_committed()` docstring claiming to
+drop both indexes when only the ranking one needs it. The dead function is deleted
+and both docstrings corrected. **Check the cache key before re-filing this.**
 
 ## M2.3 New-posting alerts (spec §2.6)
 

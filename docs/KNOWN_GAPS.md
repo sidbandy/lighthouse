@@ -145,27 +145,16 @@ half-hour of confusion if you have not seen it before.
 **Fix:** read the allowed origins from settings so the deploy can add its own,
 keeping the local defaults. Belongs with the deployment work, not before it.
 
-### Ingest is far too slow against a remote database — `incomplete`
+### Ingest write batching is done; the read side is not measured
 
-`pipeline.py` persists postings through the ORM row by row. Against local
-Postgres a full tier-1-2 run finishes in about 45 seconds. Against Supabase over
-the network the same run was still going after 20 minutes, because every insert
-and update is its own round trip and there are ~27k postings plus ~37k source
-sightings.
+The row-at-a-time persistence that made a Supabase run take over twenty
+minutes is fixed -- writes are batched, measured at 0.01 statements per posting
+against 4.2 before -- and `ingest_runs` now records whether a run finished.
 
-This matters for deployment, not just for patience: `.github/workflows/ingest.yml`
-has a 30-minute timeout and runs against Supabase. **A scheduled ingest will
-likely time out as written.**
-
-**Fix:** batch the writes. `session.bulk_insert_mappings` / `bulk_update_mappings`,
-or a Postgres `INSERT ... ON CONFLICT DO UPDATE` built from the deduped rows,
-turns tens of thousands of round trips into tens. The dedup logic already
-produces a clean list of rows to write, so this is a change to the persistence
-step only. Measure against Supabase, not locally — locally it is fast enough to
-hide the problem entirely.
-
-**Until then:** run ingest locally and treat the local database as the source of
-truth, or raise the workflow timeout and accept a long run.
+What is *not* measured is the fetch side. A full run is ~105 HTTP fetches, and
+that cost is untouched by the write batching. It was invisible before because
+the writes dominated. If a run is ever slow again, look there first, and read
+`lighthouse.cli runs` for where the time actually went.
 
 ## Schema
 
