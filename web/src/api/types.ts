@@ -440,6 +440,10 @@ export interface Onboarding {
   target_company_count: number;
   constraints_set: boolean;
   constraints: Constraints | null;
+  /** Present only before the operator has set constraints. A starting point for
+   *  the form, never a claim that they chose it -- `constraints` stays null
+   *  until they actually answer. */
+  suggested_constraints: Constraints | null;
   student: StudentProfile | null;
   targets: TargetCompany[];
 }

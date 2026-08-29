@@ -402,6 +402,18 @@ def _onboarding_out(session: Session) -> OnboardingOut:
             if constraints
             else None
         ),
+        # Only when they have not answered yet. Sending it alongside a saved
+        # record would invite the form to quietly re-suggest cycles the
+        # operator had already removed.
+        suggested_constraints=(
+            None
+            if constraints
+            else ConstraintsOut(
+                **onboarding_service.constraints_to_dict(
+                    onboarding_service.default_constraints()
+                )
+            )
+        ),
         student=_student_out(session),
         targets=[_target_out(c) for c in onboarding_service.target_companies(session)],
     )

@@ -223,6 +223,15 @@ class OnboardingOut(BaseModel):
     target_company_count: int
     constraints_set: bool
     constraints: ConstraintsOut | None = None
+    suggested_constraints: ConstraintsOut | None = Field(
+        default=None,
+        description=(
+            "A starting point for an operator who has not set constraints yet, with the "
+            "next few applyable cycles preselected. Never a claim about the operator: "
+            "`constraints` stays null until they actually answer, which is what "
+            "`constraints_set` and the onboarding ladder read."
+        ),
+    )
     student: StudentProfileOut | None = None
     targets: list[TargetCompanyOut] = Field(default_factory=list)
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import asdict, dataclass, field
+from datetime import date
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -309,10 +310,27 @@ def constraints_to_dict(constraints: OperatorConstraints) -> dict:
     return asdict(constraints)
 
 
-def default_constraints() -> OperatorConstraints:
-    """A sensible starting point: the next few applyable cycles preselected."""
-    from datetime import date
+def default_constraints(today: date | None = None) -> OperatorConstraints:
+    """A starting point: the cycles open right now, plus the next Summer.
 
+    Summer is named rather than taken from the front of the list, because the
+    front of the list is not where it is. From August 2026 the soonest three
+    applyable cycles are Fall 2026, Winter 2027 and Spring 2027 -- and Winter
+    and Spring carry 32 and 29 live postings against Summer 2027's 294. Summer
+    is the main internship cycle; the off-cycles are the small ones that happen
+    to start sooner. Slicing the first three drops exactly the cycle the
+    operator is most likely recruiting for, which is a bad thing for a default
+    to do quietly.
+
+    This is a suggestion, never an answer. It seeds the form; storage stays
+    empty until the operator saves, which is what the onboarding ladder reads.
+    """
+    from ..core.models import Season
     from ..ingest.seasons import applyable_cycles
 
-    return OperatorConstraints(target_cycles=[c.label for c in applyable_cycles(date.today())[:3]])
+    cycles = applyable_cycles(today or date.today())
+    chosen = cycles[:3]
+    summer = next((c for c in cycles if c.season is Season.SUMMER), None)
+    if summer is not None and summer not in chosen:
+        chosen = sorted([*chosen, summer], key=lambda c: c.sort_key)
+    return OperatorConstraints(target_cycles=[c.label for c in chosen])

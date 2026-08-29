@@ -162,3 +162,133 @@ class TestNextStep:
     def test_is_complete_tracks_the_last_step(self):
         assert _state(fact_count=3, targets=1, constraints_set=True).is_complete is True
         assert _state(fact_count=3, targets=1, constraints_set=False).is_complete is False
+
+
+class TestDefaultConstraints:
+    """The suggestion offered to an operator who has not answered yet.
+
+    It exists because target_cycles had no picker and was therefore saved as an
+    empty list for everyone, while still seeding filters. The rule that matters
+    is that a suggestion is not an answer: it must never advance the onboarding
+    ladder, or the operator is marked done for a question nobody asked them."""
+
+    def test_preselects_the_soonest_applyable_cycles(self):
+        from datetime import date
+
+        from lighthouse.core.onboarding import default_constraints
+        from lighthouse.ingest.seasons import applyable_cycles
+
+        soonest = [c.label for c in applyable_cycles(date.today())[:3]]
+        chosen = default_constraints().target_cycles
+
+        assert soonest, "there is always at least one applyable cycle"
+        assert set(soonest) <= set(chosen)
+        assert chosen == sorted(
+            chosen, key=lambda label: [c.label for c in applyable_cycles(date.today())].index(label)
+        ), "cycles stay in soonest-first order"
+
+    def test_always_includes_the_next_summer(self):
+        """The main internship cycle is not always in the soonest three. From
+        August 2026 the first three are Fall 2026, Winter 2027 and Spring 2027,
+        and Summer 2027 -- the cycle with ten times the postings of either
+        off-cycle term -- falls off the end. A default that drops it points a
+        new operator away from what they are actually recruiting for."""
+        from datetime import date
+
+        from lighthouse.core.models import Season
+        from lighthouse.core.onboarding import default_constraints
+        from lighthouse.ingest.seasons import applyable_cycles
+
+        summer = next(c for c in applyable_cycles(date.today()) if c.season is Season.SUMMER)
+
+        assert summer.label in default_constraints().target_cycles
+
+    @pytest.mark.parametrize("month", range(1, 13))
+    def test_invariants_hold_in_every_month(self, month):
+        """Swept across a year because the interesting branch is seasonal: in
+        some months Summer is already inside the soonest three and must not be
+        appended twice, in others it is off the end and must be added. Pinning
+        only today's date would leave one of those two paths untested for
+        months at a time."""
+        from datetime import date
+
+        from lighthouse.core.models import Season
+        from lighthouse.core.onboarding import default_constraints
+        from lighthouse.ingest.seasons import applyable_cycles
+
+        today = date(2026, month, 15)
+        applyable = applyable_cycles(today)
+        chosen = default_constraints(today).target_cycles
+
+        assert len(chosen) == len(set(chosen)), "no cycle suggested twice"
+        assert set(chosen) <= {c.label for c in applyable}, "never suggests a closed cycle"
+        assert {c.label for c in applyable[:3]} <= set(chosen), "keeps the soonest three"
+
+        summer = next(c for c in applyable if c.season is Season.SUMMER)
+        assert summer.label in chosen, "the main internship cycle is never dropped"
+        assert 3 <= len(chosen) <= 4
+
+    def test_suggestion_matches_the_stored_shape(self):
+        """Every other field takes the dataclass default, so saving the
+        suggestion unchanged is a valid answer rather than a partial one."""
+        from lighthouse.core.onboarding import constraints_to_dict, default_constraints
+
+        assert set(constraints_to_dict(default_constraints())) == set(
+            constraints_to_dict(OperatorConstraints())
+        )
+
+    def test_suggesting_does_not_save(self, session, user_id):
+        """The absence load_constraints reports is what the ladder reads. A
+        suggestion that wrote through would mark the step done silently."""
+        from lighthouse.core.onboarding import default_constraints
+
+        default_constraints()
+
+        assert load_constraints(session, user_id=user_id) is None
+
+    def test_state_is_unaffected_by_a_suggestion(self):
+        """constraints_set tracks storage, never the suggestion."""
+        from lighthouse.core.onboarding import default_constraints
+
+        default_constraints()
+
+        assert _state(fact_count=3, targets=5, constraints_set=False).next_step == (
+            "set_constraints"
+        )
+
+
+class TestOnboardingPayload:
+    """The suggestion is offered only while the question is open.
+
+    Sending it alongside a saved record would let the form re-suggest cycles
+    the operator had already removed, which is the same class of mistake as
+    defaulting the absence away in load_constraints."""
+
+    def test_suggested_only_before_an_answer(self, session):
+        from lighthouse.core.config import get_settings
+        from lighthouse.core.router import _onboarding_out
+
+        operator = get_settings().operator_id
+
+        # _onboarding_out reads the configured operator rather than taking a
+        # user_id, so the unanswered state is established here instead of being
+        # assumed. Without this the test passes only while the real operator has
+        # not onboarded, and would start failing the day they do. Rolled back.
+        session.query(OperatorProfile).filter(OperatorProfile.user_id == operator).delete()
+
+        before = _onboarding_out(session)
+        assert before.constraints is None
+        assert before.constraints_set is False
+        assert before.suggested_constraints is not None
+        assert before.suggested_constraints.target_cycles
+
+        save_constraints(
+            session,
+            OperatorConstraints(target_cycles=["Summer 2027"]),
+            user_id=operator,
+        )
+
+        after = _onboarding_out(session)
+        assert after.constraints_set is True
+        assert after.constraints.target_cycles == ["Summer 2027"]
+        assert after.suggested_constraints is None

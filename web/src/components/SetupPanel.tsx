@@ -4,6 +4,7 @@ import { StudentProfileForm } from "./StudentProfileForm";
 import type {
   CompanySuggestion,
   Constraints,
+  CycleCount,
   Onboarding,
   SponsorshipStance,
   TargetCompany,
@@ -47,7 +48,11 @@ export function SetupPanel({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <StudentProfileForm student={onboarding.student} onChange={onChange} />
-      <ConstraintsForm constraints={onboarding.constraints} onChange={onChange} />
+      <ConstraintsForm
+        constraints={onboarding.constraints}
+        suggested={onboarding.suggested_constraints}
+        onChange={onChange}
+      />
       <TargetPicker targets={onboarding.targets} onChange={onChange} />
     </div>
   );
@@ -170,26 +175,46 @@ function TargetPicker({
 
 function ConstraintsForm({
   constraints,
+  suggested,
   onChange,
 }: {
   constraints: Constraints | null;
+  suggested: Constraints | null;
   onChange: (next: Onboarding) => void;
 }) {
+  // Saved answer first; the server's suggestion only when there is none. The
+  // literal is the last resort, for an older API that sends neither.
   const [draft, setDraft] = useState<Constraints>(
-    constraints ?? {
-      preferred_locations: [],
-      open_to_remote: true,
-      sponsorship: "us_authorized",
-      weekly_study_hours: 10,
-      target_cycles: [],
-    },
+    constraints ??
+      suggested ?? {
+        preferred_locations: [],
+        open_to_remote: true,
+        sponsorship: "us_authorized",
+        weekly_study_hours: 10,
+        target_cycles: [],
+      },
   );
   const [locationText, setLocationText] = useState(
-    (constraints?.preferred_locations ?? []).join(", "),
+    (constraints?.preferred_locations ?? suggested?.preferred_locations ?? []).join(", "),
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [cycles, setCycles] = useState<CycleCount[] | null>(null);
+
+  // The same still-applyable cycles Discover filters by, with their live
+  // posting counts, so the choice is made against real supply.
+  useEffect(() => {
+    api.cycles().then(setCycles).catch(() => setCycles([]));
+  }, []);
+
+  const toggleCycle = (label: string) =>
+    setDraft((d) => ({
+      ...d,
+      target_cycles: d.target_cycles.includes(label)
+        ? d.target_cycles.filter((c) => c !== label)
+        : [...d.target_cycles, label],
+    }));
 
   const save = () => {
     setSaving(true);
@@ -256,6 +281,51 @@ function ConstraintsForm({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Cycles were previously saved as an empty list for every operator with
+          no way to see or change them, while still seeding filters. Shown here
+          because a filter the operator cannot see is a filter they cannot
+          correct. */}
+      <div>
+        <span className="text-2xs text-navy-500">Cycles you're applying to</span>
+        {cycles === null ? (
+          <p className="text-2xs text-navy-400 mt-1">Loading cycles…</p>
+        ) : cycles.length === 0 ? (
+          <p className="text-2xs text-navy-400 mt-1">
+            No applyable cycles right now — refresh postings, or check back after the next
+            ingest.
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {cycles.map((c) => {
+                const on = draft.target_cycles.includes(c.term_label);
+                return (
+                  <button
+                    key={c.term_label}
+                    onClick={() => toggleCycle(c.term_label)}
+                    aria-pressed={on}
+                    className={`px-2 py-1 rounded-lg border text-2xs transition-colors ${
+                      on
+                        ? "border-beacon-500/50 bg-beacon-glow text-beacon-600"
+                        : "border-navy-200 text-navy-600 hover:border-navy-300"
+                    }`}
+                  >
+                    {c.term_label}{" "}
+                    <span className="tabular-nums text-navy-400">{c.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {!constraints && (
+              <p className="text-2xs text-navy-400 mt-1">
+                The soonest few are preselected as a starting point — nothing is saved
+                until you press Save.
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       <div className="flex items-center gap-4">
