@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { AnswerFeedback, PracticeQuestion, StoryMatch } from "../api/types";
+import { AnswerRecorder, canRecord } from "../lib/recorder";
+import type {
+  AnswerFeedback,
+  PracticeCapability,
+  PracticeQuestion,
+  StoryMatch,
+} from "../api/types";
 
 // Behavioural practice: say the answer out loud, then read what actually
 // happened.
@@ -72,6 +78,9 @@ export function PracticePage() {
   const [transcript, setTranscript] = useState("");
   const [interim, setInterim] = useState("");
   const [elapsed, setElapsed] = useState(0);
+  const [cap, setCap] = useState<PracticeCapability | null>(null);
+  const [measuring, setMeasuring] = useState(false);
+  const recorder = useRef<AnswerRecorder | null>(null);
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
   const [stories, setStories] = useState<StoryMatch[]>([]);
   const [asked, setAsked] = useState<string[]>([]);
@@ -107,13 +116,20 @@ export function PracticePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Asked before the operator records, never after. Discovering that a
+  // ninety-second answer could not be measured once it is over is the one
+  // failure this feature cannot afford.
+  useEffect(() => {
+    api.practiceCapabilities().then(setCap).catch(() => setCap(null));
+  }, []);
+
   useEffect(() => {
     if (phase !== "listening") return;
     const timer = setInterval(() => setElapsed((Date.now() - startedAt.current) / 1000), 250);
     return () => clearInterval(timer);
   }, [phase]);
 
-  const start = () => {
+  const start = async () => {
     const r = createRecognizer();
     if (!r) {
       setError(
@@ -156,6 +172,19 @@ export function PracticePage() {
       }
     };
 
+    // Web Speech drives the live captions; the recording is what gets
+    // measured. Two transcripts of one answer, which is the point: the operator
+    // watches the fast one while the accurate one is being made.
+    if (cap?.measures_filled_pauses && canRecord()) {
+      try {
+        recorder.current = await AnswerRecorder.start();
+      } catch {
+        // Microphone denied or busy. The answer still works from speech
+        // recognition alone, so this is a downgrade rather than a failure.
+        recorder.current = null;
+      }
+    }
+
     r.start();
     setPhase("listening");
     setError(null);
@@ -171,7 +200,10 @@ export function PracticePage() {
     setInterim("");
     setElapsed(duration);
 
-    if (!full) {
+    const rec = recorder.current;
+    recorder.current = null;
+
+    if (!full && !rec) {
       setPhase("idle");
       setError("Nothing was transcribed. Check the mic, or type the answer instead.");
       return;
@@ -179,12 +211,42 @@ export function PracticePage() {
 
     setPhase("reviewing");
     try {
-      const result = await api.reviewAnswer({
-        transcript: full,
-        duration_sec: duration,
-        question: question?.text,
-        competency: question?.competency,
-      });
+      let result: AnswerFeedback | null = null;
+
+      if (rec) {
+        // The measured path. If anything in it fails — microphone, decoding,
+        // the transcriber — fall through to the live transcript below rather
+        // than losing the answer. Someone who has just spoken for ninety
+        // seconds should never be told to do it again.
+        try {
+          setMeasuring(true);
+          const { wav } = await rec.stop();
+          result = await api.reviewRecordedAnswer(wav, {
+            question: question?.text,
+            competency: question?.competency,
+          });
+        } catch {
+          result = null;
+        } finally {
+          setMeasuring(false);
+        }
+      }
+
+      if (!result) {
+        if (!full) {
+          setPhase("idle");
+          setError("Nothing was transcribed. Check the mic, or type the answer instead.");
+          return;
+        }
+        result = await api.reviewAnswer({
+          transcript: full,
+          duration_sec: duration,
+          question: question?.text,
+          competency: question?.competency,
+          answer_mode: "spoken",
+        });
+      }
+
       setFeedback(result);
       if (question) {
         setStories(await api.storiesFor(question.competency).catch(() => []));
@@ -210,6 +272,7 @@ export function PracticePage() {
         duration_sec: 0,
         question: question?.text,
         competency: question?.competency,
+        answer_mode: "typed",
       });
       setFeedback(result);
       if (question) {
@@ -230,6 +293,13 @@ export function PracticePage() {
         <p className="text-sm text-navy-500 mt-1 leading-relaxed">
           Say the answer out loud, then read what actually happened. Everything runs in your
           browser — no audio leaves this machine, and nothing is recorded or stored.
+          {cap?.measures_filled_pauses && (
+            <>
+              {" "}
+              Filled pauses are measured from the sound by a transcriber running on this
+              machine; the recording is deleted the moment it has been read.
+            </>
+          )}
         </p>
       </div>
 
@@ -273,7 +343,13 @@ export function PracticePage() {
                 </span>
               </>
             )}
-            {phase === "reviewing" && <span className="text-xs text-navy-500">Reading it…</span>}
+            {phase === "reviewing" && (
+              <span className="text-xs text-navy-500">
+                {measuring
+                  ? "Transcribing on this machine — a few seconds…"
+                  : "Reading it…"}
+              </span>
+            )}
             {phase === "done" && (
               <button onClick={nextQuestion} className="btn-primary text-xs">
                 Next question
@@ -320,7 +396,12 @@ export function PracticePage() {
       )}
 
       {feedback && (
-        <FeedbackPanel feedback={feedback} stories={stories} wasSpoken={wasSpoken} />
+        <FeedbackPanel
+          feedback={feedback}
+          stories={stories}
+          wasSpoken={wasSpoken}
+          cap={cap}
+        />
       )}
     </div>
   );
@@ -330,15 +411,21 @@ function FeedbackPanel({
   feedback,
   stories,
   wasSpoken,
+  cap,
 }: {
   feedback: AnswerFeedback;
   stories: StoryMatch[];
   wasSpoken: boolean;
+  cap: PracticeCapability | null;
 }) {
   const verdictColor: Record<string, string> = {
     good: "text-good",
     watch: "text-warn",
     off: "text-bad",
+    // Measured, but not judgeable — a filler count taken from a transcript is a
+    // floor, since every transcriber drops "um". Rendered in the quietest tier
+    // so it reads as "no verdict" rather than as a pass.
+    unknown: "text-navy-400",
   };
 
   return (
@@ -381,14 +468,75 @@ function FeedbackPanel({
                 </span>
               </div>
             ))}
+            {/* Where the "um" was, as spans rather than a total. A count is a
+                number to argue with; a timestamp is something to go and hear.
+                Only the ones in the filled-pause band are called fillers — a
+                longer voiced stretch is shown and left unnamed, because the
+                detector cannot tell a laugh from a word it missed. */}
+            {feedback.voiced_gaps.length > 0 && (
+              <div className="pt-2 mt-1 border-t border-navy-100">
+                <p className="text-2xs text-navy-400 mb-1">
+                  Voiced time carrying no word — play these back to hear what they were:
+                </p>
+                <ul className="space-y-0.5">
+                  {feedback.voiced_gaps.slice(0, 6).map((g) => (
+                    <li key={`${g.start}-${g.end}`} className="text-2xs text-navy-600">
+                      <span className="tabular-nums text-navy-500">{g.statement}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {feedback.mode === "transcript" && cap && !cap.measures_filled_pauses && (
+              <p className="text-2xs text-navy-400 pt-2 mt-1 border-t border-navy-100 leading-relaxed">
+                {cap.note}
+              </p>
+            )}
             {feedback.delivery.filler_examples.length > 0 && (
               <p className="text-2xs text-navy-400 pt-1">
-                Fillers: {feedback.delivery.filler_examples.join(", ")}
+                Fillers that survived the transcript:{" "}
+                {feedback.delivery.filler_examples.join(", ")}
               </p>
             )}
           </div>
         )}
       </section>
+
+      {/* Only for spoken, measurable answers: a typed answer has no pace to
+          compare, and a four-word one has nothing to compare either. The
+          numbers are shown without a colour, because direction is not the same
+          as improvement — filler density falling is good, pace falling may not
+          be, and the reader is the one who knows which they were aiming at. */}
+      {wasSpoken && feedback.delivery.is_measurable && (
+        <section className="card p-4">
+          <h2 className="rule-label mb-2">Against your own sessions</h2>
+          {feedback.trends.length === 0 ? (
+            <p className="text-2xs text-navy-500 leading-relaxed">
+              This is the first answer Lighthouse has measured. Do one more and it can
+              show you whether your delivery is moving — the only baseline worth
+              anything here is you, earlier.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {feedback.trends.map((t) => (
+                <div key={t.key} className="flex items-baseline gap-2 text-xs flex-wrap">
+                  <span className="text-navy-700 w-24 shrink-0">{t.label}</span>
+                  <span className="tabular-nums text-navy-500">
+                    {t.first} <span className="text-navy-300">→</span>{" "}
+                    <span className="font-600 text-navy-900">{t.latest}</span>
+                  </span>
+                  <span className="text-2xs text-navy-500 basis-full sm:basis-auto sm:ml-2">
+                    {t.statement}
+                  </span>
+                </div>
+              ))}
+              <p className="text-2xs text-navy-400 pt-1">
+                Measurements only — nothing you said was stored.
+              </p>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="card p-4">
         <h2 className="rule-label mb-2">Structure</h2>

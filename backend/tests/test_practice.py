@@ -73,11 +73,28 @@ class TestFillers:
         _, examples = delivery.count_fillers("um um um basically uh")
         assert examples[0].startswith("um")
 
-    def test_a_clean_answer_reads_as_clean(self):
+    def test_a_clean_transcript_is_not_reported_as_a_clean_answer(self):
+        """This assertion was reversed deliberately.
+
+        It used to require a verdict of "good", which was this project telling
+        the operator they were fluent on the strength of a transcript that had
+        already deleted the evidence. Browser speech recognition discards "um"
+        as noise and Whisper was trained on cleaned subtitles, so a low lexical
+        count says the transcriber was tidy, not that the speaker was. The
+        honest verdict is that it was not measured.
+        """
         report = delivery.analyse(_STEADY, duration_sec=60)
-        assert report.by_key("filler_density").verdict == "good"
+        assert report.by_key("filler_density").verdict == "unknown"
+        assert "cannot be read as clean" in report.by_key("filler_density").detail
+
+    def test_a_summary_does_not_claim_a_good_band_on_an_unmeasured_metric(self):
+        report = delivery.analyse(_STEADY, duration_sec=60)
+        assert "good band on every measure" not in report.summary()
+        assert "cannot be judged from a transcript" in report.summary()
 
     def test_heavy_filler_use_is_flagged(self):
+        """A high count stays actionable: the transcript only ever undercounts,
+        so the real number can be worse but never better."""
         text = " ".join(["um like you know word word word"] * 12)
         report = delivery.analyse(text, duration_sec=60)
         assert report.by_key("filler_density").verdict == "off"

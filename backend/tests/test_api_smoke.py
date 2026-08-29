@@ -13,13 +13,10 @@ catches the whole family of "wired up wrong" that pure-function tests cannot
 see. Every write goes to a scratch user so the real operator's data is untouched.
 """
 
-import uuid
-
 import pytest
 from fastapi.testclient import TestClient
 
 from lighthouse.api import app
-from lighthouse.core.config import get_settings
 
 
 @pytest.fixture(scope="module")
@@ -28,11 +25,15 @@ def client():
 
 
 @pytest.fixture(autouse=True)
-def scratch_operator(monkeypatch):
-    """Point writes at an operator that does not exist outside this module."""
-    settings = get_settings()
-    monkeypatch.setattr(settings, "operator_id", uuid.uuid4(), raising=False)
-    yield
+def _isolate_writes(scratch_operator):
+    """Every write in this module goes to a throwaway operator and is deleted
+    afterwards. See ``scratch_operator`` in conftest for why identity rather
+    than a transaction is what isolates these.
+
+    Before this existed, each suite run left one committed row per write
+    endpoint behind in whatever database the suite was pointed at — invisible,
+    individually harmless, and unbounded.
+    """
 
 
 class TestReads:

@@ -688,3 +688,57 @@ class PracticeAttempt(Base):
             name="ck_attempt_outcome",
         ),
     )
+
+
+class PracticeSession(Base):
+    """One mock answer, reduced to its measurements.
+
+    The transcript and the audio are deliberately absent. Practice tells the
+    operator that nothing they say into it is recorded or kept, and a table of
+    every answer they ever rehearsed would quietly break that promise. So this
+    stores what a trend needs -- numbers, dated -- and nothing that could
+    reconstruct what was said.
+
+    ``metrics`` holds the numeric value per delivery key and not the verdict.
+    The bands a value is judged against are code constants and will move; a
+    stored verdict would freeze last month's opinion into this month's trend.
+
+    ``drift`` is a count for the same reason the transcript is missing: the
+    claims themselves quote the operator out loud.
+    """
+
+    __tablename__ = "practice_sessions"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = _operator_fk()
+
+    # 'technical' has no consumer yet. It is here so the coding mock does not
+    # need a migration to start writing rows next to these ones.
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, default="behavioural")
+    competency: Mapped[str | None] = mapped_column(String(40), index=True)
+    question: Mapped[str | None] = mapped_column(Text)
+
+    # Typed answers have no duration, so their pace and length are not
+    # comparable with spoken ones. Recording which it was is what stops a typed
+    # session silently poisoning a spoken trend.
+    answer_mode: Mapped[str] = mapped_column(String(10), nullable=False, default="spoken")
+    duration_sec: Mapped[float | None] = mapped_column(Float)
+    word_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_measurable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    metrics: Mapped[dict] = mapped_column(JSONB, default=dict)
+    structure_present: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    drift_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('behavioural','technical')", name="ck_practice_session_kind"
+        ),
+        CheckConstraint(
+            "answer_mode IN ('spoken','typed')", name="ck_practice_session_answer_mode"
+        ),
+    )

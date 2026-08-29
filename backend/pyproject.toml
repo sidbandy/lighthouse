@@ -39,6 +39,18 @@ resume = [
 aggregators = [
     "python-jobspy>=1.1.80",
 ]
+# The local voice pipeline for Practice. onnxruntime runs the Silero voice
+# detector, which is a 2 MB model rather than a framework -- deliberately not
+# the `silero-vad` pip package, which pulls torch and would break the RAM budget
+# this whole project is shaped around.
+#
+# whisper.cpp is a binary, not a wheel, so it is not listed here:
+#   brew install whisper-cpp
+# Both are optional. Without them Practice measures what a transcript can show
+# and says so; it never fails.
+voice = [
+    "onnxruntime>=1.20",
+]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",

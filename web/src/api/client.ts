@@ -29,6 +29,7 @@ import type {
   ParsedContact,
   PracticeQuestion,
   PostingDetail,
+  PracticeCapability,
   ReferralReport,
   StoryMatch,
   StudyHome,
@@ -235,8 +236,29 @@ export const api = {
     duration_sec: number;
     question?: string;
     competency?: string;
+    // Typed answers are recorded but never enter a delivery trend — there is no
+    // duration for typed text, so its pace is not the same measurement.
+    answer_mode?: "spoken" | "typed";
     words?: { text: string; start: number; end: number }[];
   }) => send<AnswerFeedback>("POST", "/api/practice/answer", answer),
+  practiceCapabilities: () =>
+    get<PracticeCapability>("/api/practice/capabilities"),
+
+  // Multipart rather than JSON: this is 16 kHz mono WAV, and base64 in a JSON
+  // body would inflate it by a third for no benefit. The audio goes to the
+  // local API, is measured, and is never stored.
+  reviewRecordedAnswer: async (
+    wav: Blob,
+    meta: { question?: string; competency?: string },
+  ) => {
+    const form = new FormData();
+    form.append("audio", wav, "answer.wav");
+    const query = new URLSearchParams();
+    if (meta.question) query.set("question", meta.question);
+    if (meta.competency) query.set("competency", meta.competency);
+    return postForm<AnswerFeedback>(`/api/practice/answer/audio?${query}`, form);
+  },
+
   storiesFor: (competency: string) =>
     get<StoryMatch[]>("/api/practice/question/stories", { competency }),
 

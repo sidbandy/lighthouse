@@ -22,7 +22,11 @@ DEFAULT_OPERATOR_ID = UUID("00000000-0000-4000-8000-000000000001")
 # is resolved against CWD, so running alembic from backend/ silently missed the
 # real .env and fell back to the local default -- a migration that reported
 # success while pointing at the wrong database.
-ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+ENV_FILE = REPO_ROOT / ".env"
+
+# Where the local voice models live. Gitignored: they are large and downloadable.
+WEIGHTS_DIR = REPO_ROOT / "models" / "weights"
 
 
 class Settings(BaseSettings):
@@ -84,6 +88,18 @@ class Settings(BaseSettings):
     # Politeness for outbound fetches. Identifies the client to source hosts.
     user_agent: str = "lighthouse-jobsearch/0.1 (personal use)"
     http_timeout_seconds: float = 30.0
+
+    # The local voice pipeline for Practice (extras: voice). Both pieces are
+    # optional and independently so: the voice detector alone still improves the
+    # pause measurements, and neither being present is a supported state rather
+    # than an error. Paths default under models/weights/, which is gitignored.
+    whisper_binary: str = "whisper-cli"
+    whisper_model: str = str(WEIGHTS_DIR / "ggml-base.en-q5_1.bin")
+    vad_model: str = str(WEIGHTS_DIR / "silero_vad.onnx")
+
+    # A mock answer runs to a few minutes; past this the upload is not an answer.
+    # 16 kHz mono 16-bit is ~1.9 MB a minute, so this is roughly eight minutes.
+    max_audio_bytes: int = 16_000_000
 
 
 @lru_cache

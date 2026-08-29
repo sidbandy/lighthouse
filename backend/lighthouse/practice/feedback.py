@@ -46,7 +46,7 @@ _STAR_MARKERS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-_STAR_LABELS = {
+STAR_LABELS = {
     "situation": "Situation",
     "task": "Task",
     "action": "Action",
@@ -118,7 +118,7 @@ def check_structure(transcript: str) -> list[StructureFinding]:
     return [
         StructureFinding(
             part=part,
-            label=_STAR_LABELS[part],
+            label=STAR_LABELS[part],
             present=any(marker in text for marker in markers),
             advice=advice[part],
         )

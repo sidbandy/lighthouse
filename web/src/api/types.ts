@@ -853,6 +853,39 @@ export interface DriftFinding {
   detail: string;
 }
 
+/** One delivery metric across the operator's own past sessions. Direction is
+ *  reported, never judged: falling filler density is an improvement, falling
+ *  pace is not necessarily one, and only the reader knows which they wanted. */
+export interface DeliveryTrend {
+  key: string;
+  label: string;
+  first: number;
+  latest: number;
+  sessions: number;
+  change: number;
+  statement: string;
+}
+
+/** What the local voice pipeline can measure on this machine, resolved before
+ *  the operator records rather than after. */
+export interface PracticeCapability {
+  mode: "acoustic" | "transcript";
+  voice_detector: boolean;
+  transcriber: boolean;
+  measures_filled_pauses: boolean;
+  note: string;
+}
+
+/** Voiced time the transcriber wrote no word for — where the "um" was.
+ *  A span rather than a count, so it can be played back and disagreed with. */
+export interface VoicedGap {
+  start: number;
+  end: number;
+  duration: number;
+  is_probable_filler: boolean;
+  statement: string;
+}
+
 export interface AnswerFeedback {
   delivery: DeliveryReport;
   structure: StructureFinding[];
@@ -861,6 +894,9 @@ export interface AnswerFeedback {
   summary: string;
   provider: string;
   is_fallback: boolean;
+  trends: DeliveryTrend[];
+  voiced_gaps: VoicedGap[];
+  mode: "acoustic" | "transcript";
 }
 
 export interface StoryMatch {
