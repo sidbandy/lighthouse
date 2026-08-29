@@ -73,11 +73,15 @@ def _fact_input(payload: FactIn) -> corpus_service.FactInput:
 
 
 def _committed(session: Session) -> None:
-    """Commit, then drop the cached match and market indexes.
+    """Commit, then drop the cached match index.
 
-    Both are keyed on corpus/posting state, so they would eventually notice --
-    but "eventually" means the operator adds a project and sees an unchanged
-    score, which reads as the app ignoring them.
+    It is keyed on corpus state, so it would eventually notice -- but
+    "eventually" means the operator adds a project and sees an unchanged score,
+    which reads as the app ignoring them.
+
+    The market index behind corpus coverage needs no drop here: its key carries
+    the posting count and latest sighting, so an ingest rebuilds it and a corpus
+    edit does not change it.
     """
     session.commit()
     ranking.invalidate_cache()

@@ -77,6 +77,8 @@ export function NetworkPage() {
     try {
       await api.deleteContact(id);
       await load();
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
     } finally {
       setBusyId(null);
     }

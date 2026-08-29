@@ -55,7 +55,7 @@ export function ResumeCheck() {
           if (e.dataTransfer.files[0]) run(e.dataTransfer.files[0]);
         }}
         className={`card flex flex-col items-center justify-center py-10 cursor-pointer border-dashed
-                    transition-colors ${
+                    transition-colors focus-within:ring-2 focus-within:ring-beacon-500 ${
                       dragging ? "border-beacon-500 bg-beacon-glow" : "hover:border-navy-300"
                     }`}
       >
@@ -63,7 +63,7 @@ export function ResumeCheck() {
           ref={inputRef}
           type="file"
           accept="application/pdf,.pdf"
-          className="hidden"
+          className="sr-only"
           onChange={(e) => e.target.files?.[0] && run(e.target.files[0])}
         />
         <div className="text-2xl mb-2 text-navy-500">↑</div>

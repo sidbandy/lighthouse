@@ -82,14 +82,14 @@ export function ResumeImport({ onImported }: { onImported: (count: number) => vo
             if (e.dataTransfer.files[0]) run(e.dataTransfer.files[0]);
           }}
           className={`card flex flex-col items-center justify-center py-8 cursor-pointer border-dashed
-                      transition-colors ${
+                      transition-colors focus-within:ring-2 focus-within:ring-beacon-500 ${
                         dragging ? "border-beacon-500 bg-beacon-glow" : "hover:border-navy-300"
                       }`}
         >
           <input
             type="file"
             accept="application/pdf,.pdf"
-            className="hidden"
+            className="sr-only"
             onChange={(e) => e.target.files?.[0] && run(e.target.files[0])}
           />
           <div className="text-xl mb-1.5 text-navy-500">↑</div>

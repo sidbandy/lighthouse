@@ -86,6 +86,8 @@ export function TrackBoard() {
     try {
       await api.untrack(id);
       await load();
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
     } finally {
       setBusyId(null);
     }

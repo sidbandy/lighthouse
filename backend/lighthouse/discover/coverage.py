@@ -298,12 +298,6 @@ def market_index(session: Session, role_families: tuple[str, ...] = ()) -> Marke
     return _cache.get(session, role_families)
 
 
-def invalidate_cache() -> None:
-    """Drop cached market indexes. Used by tests and after an ingest run."""
-    global _cache
-    _cache = _MarketCache()
-
-
 def corpus_coverage(
     session: Session,
     *,

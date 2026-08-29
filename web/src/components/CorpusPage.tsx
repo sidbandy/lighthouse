@@ -173,11 +173,12 @@ export function CorpusPage() {
             telling two different versions of the same history.
           </p>
         </div>
-        {!empty && (
-          <button onClick={() => setShowSetup((v) => !v)} className="btn-toggle text-xs shrink-0">
-            {showSetup ? "Hide setup" : "Targets & constraints"}
-          </button>
-        )}
+        {/* Never gated on a non-empty corpus: the panel sets major, graduation
+            year and work authorisation, which a brand-new operator needs before
+            they have added a single fact -- and which coverage reads by default. */}
+        <button onClick={() => setShowSetup((v) => !v)} className="btn-toggle text-xs shrink-0">
+          {showSetup ? "Hide setup" : "Targets & constraints"}
+        </button>
       </div>
 
       {!onboarding.is_complete && (

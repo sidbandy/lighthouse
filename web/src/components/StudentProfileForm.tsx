@@ -34,6 +34,9 @@ export function StudentProfileForm({
   const [draft, setDraft] = useState<StudentProfile>(student ?? EMPTY);
   const [options, setOptions] = useState<MajorOptions | null>(null);
   const [suggested, setSuggested] = useState<string[]>([]);
+  // Distinct from an empty list: a dropped request must not be reported as
+  // "we don't recognise your major", which is a claim about the operator.
+  const [suggestFailed, setSuggestFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,12 +51,28 @@ export function StudentProfileForm({
     const major = draft.major?.trim();
     if (!major) {
       setSuggested([]);
+      setSuggestFailed(false);
       return;
     }
+    let cancelled = false;
     const timer = setTimeout(() => {
-      api.roleFamiliesFor(major).then(setSuggested).catch(() => setSuggested([]));
+      api
+        .roleFamiliesFor(major)
+        .then((families) => {
+          if (cancelled) return;
+          setSuggested(families);
+          setSuggestFailed(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setSuggested([]);
+          setSuggestFailed(true);
+        });
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [draft.major]);
 
   const set = <K extends keyof StudentProfile>(key: K, value: StudentProfile[K]) =>
@@ -117,6 +136,8 @@ export function StudentProfileForm({
                   {suggested.map((f) => roleLabel(f as never)).join(" · ")}
                 </span>
               </>
+            ) : suggestFailed ? (
+              "Couldn't check this major just now — saving still works."
             ) : (
               "Not a major we recognise yet — you'll see every role family instead."
             )}

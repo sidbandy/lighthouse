@@ -15,6 +15,7 @@ const POLL_MS = 3000;
 export function RefreshButton({ onFinished }: { onFinished: () => void }) {
   const [status, setStatus] = useState<RefreshStatus | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [startError, setStartError] = useState<string | null>(null);
   const wasRunning = useRef(false);
 
   const poll = useCallback(async () => {
@@ -44,8 +45,16 @@ export function RefreshButton({ onFinished }: { onFinished: () => void }) {
 
   const start = async () => {
     setElapsed(0);
+    setStartError(null);
     wasRunning.current = true;
-    setStatus(await api.startRefresh());
+    try {
+      setStatus(await api.startRefresh());
+    } catch (e) {
+      // Leaving wasRunning set would make the next poll read as a run that
+      // finished and refetch the lanes for a run that never started.
+      wasRunning.current = false;
+      setStartError(String((e as Error).message ?? e));
+    }
   };
 
   const running = status?.is_running ?? false;
@@ -70,9 +79,9 @@ export function RefreshButton({ onFinished }: { onFinished: () => void }) {
           {status.created > 0 ? `+${status.created} new` : "up to date"}
         </span>
       )}
-      {!running && status?.error && (
-        <span className="text-2xs text-beacon-400" title={status.error}>
-          refresh failed
+      {!running && (startError || status?.error) && (
+        <span className="text-2xs text-beacon-400" title={startError ?? status?.error ?? undefined}>
+          {startError ? "could not start" : "refresh failed"}
         </span>
       )}
     </div>
