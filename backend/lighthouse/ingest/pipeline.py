@@ -23,7 +23,15 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from ..core.models import Company, OperatorTarget, Posting, PostingSource, SourceHealth
+from ..core.db import session_scope
+from ..core.models import (
+    Company,
+    IngestRun,
+    OperatorTarget,
+    Posting,
+    PostingSource,
+    SourceHealth,
+)
 from .ats_targets import ats_connectors
 from .base import Connector, RawPosting, build_client
 from .dedup import MergedPosting, dedup_stats, deduplicate
@@ -477,41 +485,107 @@ def persist(session: Session, merged_postings: list[MergedPosting], today: date)
     return report
 
 
+def _open_run(max_tier: int, session_factory) -> uuid.UUID | None:
+    """Record that a run started, in its own committed transaction.
+
+    Separate from the ingest's own transaction on purpose. The run this exists
+    to make visible is the one killed by the CI timeout, and a row written
+    inside the ingest transaction dies with it -- leaving no way to tell a run
+    that never happened from one that started and was cut off.
+
+    Failing to record must never stop an ingest, so this returns None instead
+    of raising.
+    """
+    try:
+        with session_factory() as bookkeeping:
+            run = IngestRun(started_at=datetime.now(UTC), max_tier=max_tier)
+            bookkeeping.add(run)
+            bookkeeping.flush()
+            return run.id
+    except Exception:  # pragma: no cover - bookkeeping must not break the run
+        logger.exception("could not open an ingest run record")
+        return None
+
+
+def _close_run(
+    run_id: uuid.UUID | None,
+    session_factory,
+    *,
+    report: IngestReport | None = None,
+    error: str | None = None,
+) -> None:
+    """Stamp the run finished, with its totals or the error that ended it."""
+    if run_id is None:
+        return
+    try:
+        with session_factory() as bookkeeping:
+            run = bookkeeping.get(IngestRun, run_id)
+            if run is None:  # pragma: no cover - only if the row was deleted
+                return
+            run.finished_at = datetime.now(UTC)
+            run.error = error
+            if report is not None:
+                run.raw_count = report.raw_count
+                run.merged_count = report.merged_count
+                run.created = report.created
+                run.updated = report.updated
+                run.skipped_not_applyable = report.skipped_not_applyable
+                run.collapsed_in_batch = report.collapsed_in_batch
+                run.sources_total = len(report.sources)
+                run.sources_ok = sum(1 for s in report.sources if s.ok)
+    except Exception:  # pragma: no cover - bookkeeping must not break the run
+        logger.exception("could not close ingest run record %s", run_id)
+
+
 def run_ingest(
     session: Session,
     *,
     max_tier: int = 2,
     today: date | None = None,
     connectors: list[Connector] | None = None,
+    run_session_factory=session_scope,
 ) -> IngestReport:
     """Fetch every enabled source, dedup across them, and persist.
 
     Defaults to tiers 1-2, which is the fast path that already produces a
     complete usable list; higher tiers add breadth at the cost of time.
+
+    ``run_session_factory`` opens the short transactions that record the run
+    itself. It is injectable so tests can keep that bookkeeping inside their
+    own rolled-back transaction instead of committing to the real database.
     """
     today = today or datetime.now(UTC).date()
-    # Before anything is written, bring existing company rows up to the current
-    # normalisation so this run does not add a second row for a company that is
-    # already here under an older key.
-    reconcile_companies(session)
-    if connectors is None:
-        connectors = connectors_by_tier(max_tier)
-        if max_tier >= 3:
-            # Tier 3 is per company, so its targets depend on what earlier
-            # tiers have already surfaced.
-            connectors = connectors + ats_connectors(session)
+    run_id = _open_run(max_tier, run_session_factory)
+    try:
+        # Before anything is written, bring existing company rows up to the
+        # current normalisation so this run does not add a second row for a
+        # company that is already here under an older key.
+        reconcile_companies(session)
+        if connectors is None:
+            connectors = connectors_by_tier(max_tier)
+            if max_tier >= 3:
+                # Tier 3 is per company, so its targets depend on what earlier
+                # tiers have already surfaced.
+                connectors = connectors + ats_connectors(session)
 
-    all_rows: list[RawPosting] = []
-    results: list[SourceResult] = []
-    for connector in connectors:
-        rows, result = fetch_source(connector, session)
-        all_rows.extend(rows)
-        results.append(result)
-    session.flush()
+        all_rows: list[RawPosting] = []
+        results: list[SourceResult] = []
+        for connector in connectors:
+            rows, result = fetch_source(connector, session)
+            all_rows.extend(rows)
+            results.append(result)
+        session.flush()
 
-    merged = deduplicate(all_rows)
-    report = persist(session, merged, today)
-    report.sources = results
-    report.raw_count = len(all_rows)
+        merged = deduplicate(all_rows)
+        report = persist(session, merged, today)
+        report.sources = results
+        report.raw_count = len(all_rows)
+    except Exception as exc:
+        # Stamped before re-raising, so a run that failed is distinguishable
+        # from one that was killed: this leaves an error, a SIGKILL does not.
+        _close_run(run_id, run_session_factory, error=f"{type(exc).__name__}: {exc}")
+        raise
+
+    _close_run(run_id, run_session_factory, report=report)
     logger.info("ingest complete: %s | %s", report.summary(), dedup_stats(len(all_rows), merged))
     return report

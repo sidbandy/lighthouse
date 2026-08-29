@@ -293,6 +293,53 @@ class SourceHealth(Base):
     is_quarantined: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
+class IngestRun(Base):
+    """One ingest run, from the moment it starts.
+
+    ``source_health`` records how each source behaved and is the wrong place to
+    ask "did the run finish", because it is written per source: a job killed
+    halfway leaves ninety healthy sources and no indication that the run never
+    completed. This table answers that question instead.
+
+    The row is inserted and committed when the run begins, in its own
+    transaction, so that a process killed by the CI timeout still leaves
+    evidence. ``finished_at`` therefore means exactly what it says -- a row
+    with a null ``finished_at`` and no ``error`` is a run that died without
+    getting to say why, which is the case the timeout produces.
+    """
+
+    __tablename__ = "ingest_runs"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    max_tier: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+
+    raw_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    merged_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    skipped_not_applyable: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    collapsed_in_batch: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    sources_ok: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    sources_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    error: Mapped[str | None] = mapped_column(Text)
+
+    @property
+    def duration_seconds(self) -> float | None:
+        if self.finished_at is None:
+            return None
+        return (self.finished_at - self.started_at).total_seconds()
+
+    @property
+    def died_without_finishing(self) -> bool:
+        """No finish and no error: the process went away mid-run."""
+        return self.finished_at is None and self.error is None
+
+
 # --------------------------------------------------------------------------
 # Personal: the corpus
 # --------------------------------------------------------------------------

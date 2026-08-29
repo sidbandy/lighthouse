@@ -7,6 +7,7 @@ the frontend is still being built and for scheduled runs.
     python -m lighthouse.cli postings --season summer --year 2027
     python -m lighthouse.cli sources
     python -m lighthouse.cli cycles
+    python -m lighthouse.cli runs
 """
 
 from __future__ import annotations
@@ -16,8 +17,10 @@ import logging
 import sys
 from datetime import date, datetime
 
+from sqlalchemy import select
+
 from .core.db import session_scope
-from .core.models import Season
+from .core.models import IngestRun, Season
 from .discover import service
 from .ingest.pipeline import run_ingest
 from .ingest.registry import all_connectors
@@ -158,6 +161,46 @@ def cmd_sources(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_runs(args: argparse.Namespace) -> int:
+    """Recent ingest runs, and whether they finished.
+
+    `sources` answers "is this feed healthy". It cannot answer "did the run
+    finish", because it is written per source: a job killed by a CI timeout
+    leaves every source it reached looking fine. That is what this shows.
+    """
+    with session_scope() as session:
+        runs = list(
+            session.scalars(
+                select(IngestRun).order_by(IngestRun.started_at.desc()).limit(args.limit)
+            )
+        )
+
+    if not runs:
+        print("No ingest runs recorded yet.")
+        return 0
+
+    print(f"{'started':20} {'took':>8} {'sources':>9} {'new':>7} {'upd':>7}  outcome")
+    unfinished = 0
+    for run in runs:
+        took = f"{run.duration_seconds:.0f}s" if run.duration_seconds is not None else "-"
+        if run.died_without_finishing:
+            outcome = "DIED -- no finish recorded (killed? timed out?)"
+            unfinished += 1
+        elif run.error:
+            outcome = f"FAILED: {run.error[:48]}"
+        else:
+            outcome = "ok"
+        print(
+            f"{run.started_at:%Y-%m-%d %H:%M:%S}  {took:>8} "
+            f"{run.sources_ok:>4}/{run.sources_total:<4} {run.created:>7} {run.updated:>7}  "
+            f"{outcome}"
+        )
+
+    # Non-zero so a scheduled job that died is caught by whatever runs this,
+    # rather than needing someone to read the table.
+    return 1 if unfinished else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lighthouse", description=__doc__)
     parser.add_argument(
@@ -207,6 +250,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sources = sub.add_parser("sources", help="Show every source and its health.")
     sources.set_defaults(func=cmd_sources)
+
+    runs = sub.add_parser("runs", help="Show recent ingest runs and whether they finished.")
+    runs.add_argument("--limit", type=int, default=10, help="How many runs to show.")
+    runs.set_defaults(func=cmd_runs)
 
     return parser
 

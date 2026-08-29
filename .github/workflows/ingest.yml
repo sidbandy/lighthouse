@@ -21,9 +21,20 @@ concurrency:
   group: ingest
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  # So a failed run can open an issue. A scheduled workflow that fails quietly
+  # is the worst failure this product has: the list silently stops being fresh
+  # while every page still renders perfectly.
+  issues: write
+
 jobs:
   ingest:
     runs-on: ubuntu-latest
+    # The writes are batched now -- a full run is a few dozen statements rather
+    # than ~98,000 -- so this is a generous ceiling rather than a target the
+    # run creeps toward. If it is ever hit again, that is a real regression and
+    # the run record will show the run stopping without finishing.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -66,3 +77,57 @@ jobs:
         env:
           LIGHTHOUSE_DATABASE_URL: ${{ secrets.LIGHTHOUSE_DATABASE_URL }}
         run: python -m lighthouse.cli sources
+
+      # Per-source health cannot answer "did the run finish": a job killed
+      # mid-run leaves every source it reached looking healthy. This reads the
+      # run-level record instead. Never fails the job on its own -- an earlier
+      # run that died is not this run's failure.
+      - name: Run report
+        if: always()
+        env:
+          LIGHTHOUSE_DATABASE_URL: ${{ secrets.LIGHTHOUSE_DATABASE_URL }}
+        run: |
+          {
+            echo '### Recent ingest runs'
+            echo '```'
+            python -m lighthouse.cli runs --limit 5 || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # GitHub emails the person who last touched the cron when a scheduled
+      # run fails, which is easy to filter away and invisible to anyone else.
+      # An issue is durable, shows up where the work is, and one is reused
+      # rather than opening a new one every twelve hours.
+      - name: Report a failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          # Both tolerate failure: the label may not exist on a fresh repo, and
+          # a listing error must not swallow the report it was meant to raise.
+          gh label create ingest-failure \
+            --color B60205 \
+            --description "The scheduled posting refresh is failing" >/dev/null 2>&1 || true
+          existing="$(gh issue list --state open --label ingest-failure \
+                        --json number --jq '.[0].number // empty' 2>/dev/null || true)"
+          body="The scheduled posting refresh failed.
+
+          Run: $RUN_URL
+          Trigger: ${{ github.event_name }}
+          Commit: ${{ github.sha }}
+
+          Postings stop being fresh while every page still renders normally, so
+          this does not surface anywhere in the product. Check \`lighthouse.cli
+          runs\` for whether the run finished, and \`lighthouse.cli sources\`
+          for which feeds are unhealthy."
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create \
+              --title "Scheduled posting refresh is failing" \
+              --label ingest-failure \
+              --body "$body"
+          fi
