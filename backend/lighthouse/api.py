@@ -11,6 +11,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .briefing.router import router as briefing_router
 from .core.router import router as corpus_router
 from .discover.router import router as discover_router
 from .ingest.router import router as ingest_router
@@ -44,6 +45,7 @@ app.include_router(network_router)
 app.include_router(study_router)
 app.include_router(practice_router)
 app.include_router(track_router)
+app.include_router(briefing_router)
 
 
 @app.get("/health", tags=["meta"])

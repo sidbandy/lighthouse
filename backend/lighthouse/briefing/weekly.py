@@ -198,7 +198,12 @@ def build(
 
     # 4. Behavioural gaps. A competency with no story is a finite, fixable hole.
     coverage = corpus_service.story_coverage(session, user_id=uid)
-    uncovered = coverage.uncovered[:3]
+    # With no stories at all, every competency is "uncovered" -- so listing
+    # three of the nine would be picking arbitrary ones and calling them this
+    # week's work, and the headline would announce three things to an operator
+    # who has put nothing in yet. The note below is the honest first message,
+    # and gaps become real gaps once there is a bank to have gaps in.
+    uncovered = coverage.uncovered[:3] if coverage.story_count else []
     brief.sections.append(
         BriefSection(
             key="stories",
@@ -308,7 +313,11 @@ def triage(
             else:
                 band, reason = "standard", "Sent recently. Core preparation covers it."
         else:
-            band, reason = "light", "Saved but not sent. The next step is applying, not studying."
+            # Unreachable: the only remaining stages are SAVED and the terminal
+            # ones, and `is_live` filtered both out above. Kept as a loud
+            # failure rather than a silent default, because a new stage added
+            # to the enum should stop here and be given a band deliberately.
+            raise AssertionError(f"no triage band for live stage {stage!r}")
 
         out.append(
             Triage(

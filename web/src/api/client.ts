@@ -29,10 +29,12 @@ import type {
   ParsedContact,
   PracticeQuestion,
   PostingDetail,
+  TriageGroup,
   PracticeCapability,
   ReferralReport,
   StoryMatch,
   StudyHome,
+  WeeklyBrief,
   StudyProblem,
   RefreshStatus,
   ResumeVersion,
@@ -258,6 +260,9 @@ export const api = {
     if (meta.competency) query.set("competency", meta.competency);
     return postForm<AnswerFeedback>(`/api/practice/answer/audio?${query}`, form);
   },
+
+  weeklyBrief: () => get<WeeklyBrief>("/api/briefing/weekly"),
+  triage: () => get<TriageGroup[]>("/api/briefing/triage"),
 
   storiesFor: (competency: string) =>
     get<StoryMatch[]>("/api/practice/question/stories", { competency }),

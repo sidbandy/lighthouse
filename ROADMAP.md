@@ -48,9 +48,11 @@ furthest.
 
 ---
 
-**Progress, 29 Aug 2026.** M0 done. M1.1 and M1.2 done; M1.3 is the operator's
-to do and everything downstream of real data waits on it. M2.1 done. M2.2 was a
-misdiagnosis and is struck through below. Everything else stands as written.
+**Progress, 5 Sep 2026.** M0 done. M1.1/M1.2 done; **M1.3 is the operator's to do
+and everything downstream of real data still waits on it.** M2.1 done. M2.2 was a
+misdiagnosis and is struck through below. M2.6 dedup: the company-spelling split
+is fixed and the module has tests; the Red Bull near-duplicate class still
+stands. M3 done. M10.1 done. Everything else stands as written.
 
 # 1. Milestone map
 
@@ -59,14 +61,14 @@ misdiagnosis and is struck through below. Everything else stands as written.
 | M0 | De-risk | now | 1h | **done** |
 | M1 | Turn it on for real | A | 2d | **M1.1/M1.2 done; M1.3 blocked on the operator** |
 | M2 | Freshness, coverage, alerts | A | 5d | **M2.1 done**; M2.3 next |
-| M3 | Commit and wire Part 6 | A | 2d | nothing, but it's at risk |
+| M3 | Commit and wire Part 6 | A | 2d | **done** |
 | M4 | Part 3, Company Intelligence | B | 15–20d | eleven downstream features |
 | M5 | Track and Network completions | A/B | 5d | |
 | M6 | Study completions | B | 6d | |
 | M7 | Practice, the cheap three plus TMAY | B | 5d | |
 | M8 | Practice, the heavy half | C | 15d+ | |
 | M9 | Day-of kit | B | 3d | needs M4, M7 |
-| M10 | Design, mobile, accessibility | A | 5d | |
+| M10 | Design, mobile, accessibility | A | 5d | **M10.1 done**; M10.2–M10.6 open |
 | M11 | Test and infrastructure debt | continuous | 6d | |
 | M12 | Deployment | C | 3d | |
 | M13 | Stretch (spec §10) | C | — | |
@@ -300,6 +302,19 @@ M4 will take is indefensible.
 Leave `BASELINES = ()` empty for now. Filling it is a research task, scheduled in M5.4.
 
 **Exit criteria.** Sunday evening produces a digest you actually read.
+
+**Done, 5 Sep 2026.** `briefing/schemas.py` and `briefing/router.py`, mounted, two
+routes, and a `/week` page that leads the nav — it is the page that answers "what
+should I do today" and the others are where you go once you know. 18 tests on
+`weekly.py`, which was the top of the untested list at 319 lines and zero.
+
+Writing them found two unreachable branches. The stories section listed three of
+nine uncovered competencies for an operator with no stories at all, so its
+carefully written "No stories yet" note could never render and the headline
+announced three things to someone who had put nothing in. And `triage()` had an
+`else` for saved-but-unsent applications that `is_live` filters out upstream;
+it is now a raised assertion so a new stage added to the enum stops there and
+gets a band deliberately rather than silently becoming light work.
 
 ---
 

@@ -924,3 +924,54 @@ export interface RefreshStatus {
   /** False when a refresh was asked for while one was already running. */
   accepted: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Briefing — the week in one place
+// ---------------------------------------------------------------------------
+
+export interface BriefItem {
+  kind: string;
+  title: string;
+  /** The fact that produced this item, in words. Never a score. */
+  detail: string;
+  link: string;
+  due_on: string | null;
+  is_late: boolean;
+}
+
+export interface BriefSection {
+  key: string;
+  title: string;
+  items: BriefItem[];
+  count: number;
+  /** Shown instead of the items. An empty section is information, but only if
+   *  it says which kind of empty it is. */
+  empty_note: string;
+}
+
+export interface WeeklyBrief {
+  generated_for: string;
+  headline: string;
+  total_items: number;
+  late_items: number;
+  sections: BriefSection[];
+  funnel_note: string;
+  baseline_note: string;
+}
+
+export interface TriageApplication {
+  application_id: string;
+  posting_title: string;
+  company_name: string;
+  band: string;
+  band_blurb: string;
+  reason: string;
+  stage_label: string;
+}
+
+export interface TriageGroup {
+  band: string;
+  blurb: string;
+  applications: TriageApplication[];
+  count: number;
+}

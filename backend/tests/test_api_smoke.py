@@ -63,6 +63,8 @@ class TestReads:
             "/api/study",
             "/api/study/patterns",
             "/api/practice/question",
+            "/api/briefing/weekly",
+            "/api/briefing/triage",
         ],
     )
     def test_it_answers(self, client, path):

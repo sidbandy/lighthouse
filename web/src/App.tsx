@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { api } from "./api/client";
 import type { LaneBucket } from "./api/types";
+import { BriefingPage } from "./components/BriefingPage";
 import { CorpusPage } from "./components/CorpusPage";
 import { EMPTY_FILTERS, FilterBar, parseStates, type Filters } from "./components/FilterBar";
 import { Header } from "./components/Header";
@@ -78,6 +79,15 @@ export default function App() {
             <>
               <Header />
               <ResumeCheck />
+            </>
+          }
+        />
+        <Route
+          path="/week"
+          element={
+            <>
+              <Header />
+              <BriefingPage />
             </>
           }
         />

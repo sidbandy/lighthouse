@@ -29,6 +29,9 @@ function Beacon() {
 }
 
 const NAV: { to: string; label: string }[] = [
+  // First, because it is the page that answers "what should I do today"; the
+  // others are where you go once you know.
+  { to: "/week", label: "This week" },
   { to: "/discover", label: "Discover" },
   { to: "/applications", label: "Applications" },
   { to: "/network", label: "Network" },
@@ -106,8 +109,9 @@ export function Header({ onRefreshed }: { onRefreshed?: () => void }) {
           Only trouble earns the beacon colour. */}
       <span className={`h-1.5 w-1.5 rounded-full ${quarantined ? "bg-beacon-400" : "bg-white/50"}`} />
       {/* "90 sources" read as the total. It is the healthy count out of 105,
-          and the difference is the whole point of showing it. */}
-      {okSources}/{health.length} sources
+          and the difference is the whole point of showing it. Before the first
+          ingest there is no health at all, and "0/0" says less than nothing. */}
+      {health.length === 0 ? "no sources yet" : `${okSources}/${health.length} sources`}
       {quarantined > 0 && <span className="text-beacon-400">· {quarantined} need attention</span>}
     </button>
   );
