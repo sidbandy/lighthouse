@@ -32,11 +32,31 @@ export function PostingDrawer({
   const [posting, setPosting] = useState<PostingDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [fetchNote, setFetchNote] = useState<string | null>(null);
+
+  // Reaches the employer's own page, so it happens because the operator asked
+  // -- never on open, never in the background.
+  const pullDescription = async () => {
+    if (!id) return;
+    setFetching(true);
+    setFetchNote(null);
+    try {
+      const result = await api.fetchDescription(id);
+      setFetchNote(result.reason);
+      if (result.ok && result.posting) setPosting(result.posting);
+    } catch (e) {
+      setFetchNote(String((e as Error).message ?? e));
+    } finally {
+      setFetching(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
     setPosting(null);
     setError(null);
+    setFetchNote(null);
     setLoading(true);
     api
       .posting(id)
@@ -63,7 +83,14 @@ export function PostingDrawer({
         {loading && <div className="p-8 text-sm text-navy-500">Loading…</div>}
         {error && <div className="p-8 text-sm text-bad">Could not load posting. {error}</div>}
         {posting && (
-          <DrawerBody posting={posting} onClose={onClose} onTrackedChange={onTrackedChange} />
+          <DrawerBody
+            posting={posting}
+            onClose={onClose}
+            onTrackedChange={onTrackedChange}
+            onFetchDescription={pullDescription}
+            fetching={fetching}
+            fetchNote={fetchNote}
+          />
         )}
       </div>
     </div>
@@ -74,10 +101,16 @@ function DrawerBody({
   posting,
   onClose,
   onTrackedChange,
+  onFetchDescription,
+  fetching,
+  fetchNote,
 }: {
   posting: PostingDetail;
   onClose: () => void;
   onTrackedChange?: () => void;
+  onFetchDescription: () => void;
+  fetching: boolean;
+  fetchNote: string | null;
 }) {
   const sponsorship = sponsorshipLabel(posting.sponsorship);
   const [tracked, setTracked] = useState(posting.tracked);
@@ -195,6 +228,34 @@ function DrawerBody({
             <p className="mt-2 text-2xs text-navy-500">
               ATS: {posting.ats_vendor}
               {posting.ats_job_id && ` · job ${posting.ats_job_id}`}
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* Title-only is the common case: the list repos that give the widest
+          coverage carry no description, so the match above was computed from a
+          title. Offer to go and get the real thing rather than leaving the
+          operator to open the tab themselves and lose the comparison. */}
+      {!posting.description_available && (
+        <section className="card p-4">
+          <h3 className="text-2xs font-600 uppercase tracking-wide text-navy-600 mb-1.5">
+            No description yet
+          </h3>
+          <p className="text-xs text-navy-500 leading-relaxed">
+            This came from a list that carries titles only, so the match above was scored
+            from the title alone. Lighthouse can read the employer's own page for it.
+          </p>
+          <button
+            onClick={onFetchDescription}
+            disabled={fetching}
+            className="btn-primary text-xs mt-2.5 disabled:opacity-60 disabled:cursor-wait"
+          >
+            {fetching ? "Reading the page…" : "Fetch the description"}
+          </button>
+          {fetchNote && (
+            <p className="text-2xs text-navy-500 mt-2 leading-relaxed" role="status">
+              {fetchNote}
             </p>
           )}
         </section>

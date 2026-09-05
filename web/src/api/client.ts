@@ -26,6 +26,7 @@ import type {
   MajorOptions,
   NetworkOverview,
   Onboarding,
+  DescriptionFetch,
   ParsedContact,
   PracticeQuestion,
   PostingDetail,
@@ -260,6 +261,9 @@ export const api = {
     if (meta.competency) query.set("competency", meta.competency);
     return postForm<AnswerFeedback>(`/api/practice/answer/audio?${query}`, form);
   },
+
+  fetchDescription: (postingId: string) =>
+    send<DescriptionFetch>("POST", `/api/postings/${postingId}/description`),
 
   weeklyBrief: () => get<WeeklyBrief>("/api/briefing/weekly"),
   triage: () => get<TriageGroup[]>("/api/briefing/triage"),

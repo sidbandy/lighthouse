@@ -262,3 +262,17 @@ class IngestResultOut(BaseModel):
     skipped_not_applyable: int
     term_rules: dict[str, int]
     sources: list[IngestSourceResult]
+
+
+class DescriptionFetchOut(BaseModel):
+    """The result of fetching one posting's description on demand."""
+
+    ok: bool
+    reason: str = Field(
+        description="What happened, in words the operator can act on. Never a code."
+    )
+    chars: int = 0
+    posting: PostingDetail | None = Field(
+        default=None,
+        description="The posting as it now stands, rescored. Null when nothing was fetched.",
+    )

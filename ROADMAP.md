@@ -60,7 +60,7 @@ stands. M3 done. M10.1 done. Everything else stands as written.
 |---|---|---|---|---|
 | M0 | De-risk | now | 1h | **done** |
 | M1 | Turn it on for real | A | 2d | **M1.1/M1.2 done; M1.3 blocked on the operator** |
-| M2 | Freshness, coverage, alerts | A | 5d | **M2.1 done**; M2.3 next |
+| M2 | Freshness, coverage, alerts | A | 5d | **M2.1 done, M2.4 on-demand fetch done**; M2.3 next |
 | M3 | Commit and wire Part 6 | A | 2d | **done** |
 | M4 | Part 3, Company Intelligence | B | 15–20d | eleven downstream features |
 | M5 | Track and Network completions | A/B | 5d | |
@@ -231,11 +231,18 @@ app.
 The Safety lane is title-only because the accessible end of the market is on Workday and
 there is no Workday connector. Two independent fixes, do both.
 
-- **On-demand description fetch (spec §2.3).** When the operator opens a posting detail
-  view and `description_available` is false, fetch the description from the posting URL,
-  parse, persist, rescore. Per-posting, only on an action already taken, no bulk load.
-  Respect `robots.txt` and rate limit politely. This is the smaller change and it fixes
-  the case you actually hit, which is the posting you are looking at right now
+- ~~**On-demand description fetch (spec §2.3).**~~ **Done, 5 Sep 2026.** A button in the
+  posting window, one posting, only on an action the operator already took. robots.txt
+  decides and a disallow is reported rather than routed around. Works on Greenhouse,
+  Lever and Ashby; Workday is JavaScript-rendered and says so plainly instead of failing.
+
+  Two guards came out of testing it against real pages rather than fixtures. A Lever
+  `/apply` URL is the application form, not the posting, so it is normalised to the base
+  URL — before that it returned 109,435 characters of which roughly 90% was the university
+  dropdown, several thousand school names that would have gone into match scoring as
+  though the employer had asked for them. And anything over 40,000 characters is refused
+  rather than truncated, because half a page cut at an arbitrary point is not a
+  description either and it would look like one.
 - **A Workday connector, or a tier-4 aggregator.** Workday's `myworkdayjobs.com` boards
   expose a JSON endpoint per tenant. The `python-jobspy` dependency is already declared
   and never imported, which is the other route. Either way this is the difference between

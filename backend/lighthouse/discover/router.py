@@ -9,12 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..core.db import get_session
-from ..core.models import EmploymentType, RoleFamily, Season, Sponsorship
+from ..core.models import EmploymentType, Posting, RoleFamily, Season, Sponsorship
 from ..track import applications as track_applications
 from ..track.schemas import TrackedStateOut
+from . import description as description_service
 from . import ranking, service
 from .schemas import (
     CycleCount,
+    DescriptionFetchOut,
     LaneBucketOut,
     PostingDetail,
     PostingPage,
@@ -140,6 +142,37 @@ def get_posting(posting_id: UUID, session: Session = Depends(get_session)) -> Po
         raise HTTPException(status_code=404, detail="Posting not found")
     _attach_tracked(session, [posting])
     return posting
+
+
+@router.post("/postings/{posting_id}/description", response_model=DescriptionFetchOut)
+def fetch_posting_description(
+    posting_id: UUID, session: Session = Depends(get_session)
+) -> DescriptionFetchOut:
+    """Fetch this one posting's description from the employer's page.
+
+    Deliberately a POST on a single posting rather than anything automatic: it
+    reaches out to a third-party host, so it happens because the operator asked
+    by opening the posting and pressing the button, never on its own.
+
+    A failure is a 200 with ``ok: false`` and a reason. It is an expected
+    outcome -- login walls and JavaScript-rendered pages are common -- and the
+    operator needs to read why, not catch an error.
+    """
+    row = session.get(Posting, posting_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Posting not found")
+
+    result = description_service.refresh_posting(session, row)
+    if not result.ok:
+        return DescriptionFetchOut(ok=False, reason=result.reason, chars=result.chars)
+
+    session.commit()
+    posting = service.get_posting(session, posting_id)
+    if posting is not None:
+        _attach_tracked(session, [posting])
+    return DescriptionFetchOut(
+        ok=True, reason=result.reason, chars=result.chars, posting=posting
+    )
 
 
 @router.get("/cycles", response_model=list[CycleCount])

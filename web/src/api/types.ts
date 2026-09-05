@@ -975,3 +975,12 @@ export interface TriageGroup {
   applications: TriageApplication[];
   count: number;
 }
+
+export interface DescriptionFetch {
+  ok: boolean;
+  /** What happened, in words. Never a code. */
+  reason: string;
+  chars: number;
+  /** The posting as it now stands, rescored. Null when nothing was fetched. */
+  posting: PostingDetail | null;
+}
