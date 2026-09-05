@@ -48,7 +48,8 @@ furthest.
 
 ---
 
-**Progress, 5 Sep 2026.** M0 done. M1.1/M1.2 done; **M1.3 is the operator's to do
+**Progress, 5 Sep 2026.** The apply loop is complete: M0, M1.1/M1.2, M2.1, M2.3,
+M2.4's on-demand fetch, M3 and M10.1 are done. M0 done. M1.1/M1.2 done; **M1.3 is the operator's to do
 and everything downstream of real data still waits on it.** M2.1 done. M2.2 was a
 misdiagnosis and is struck through below. M2.6 dedup: the company-spelling split
 is fixed and the module has tests; the Red Bull near-duplicate class still
@@ -60,7 +61,7 @@ stands. M3 done. M10.1 done. Everything else stands as written.
 |---|---|---|---|---|
 | M0 | De-risk | now | 1h | **done** |
 | M1 | Turn it on for real | A | 2d | **M1.1/M1.2 done; M1.3 blocked on the operator** |
-| M2 | Freshness, coverage, alerts | A | 5d | **M2.1 done, M2.4 on-demand fetch done**; M2.3 next |
+| M2 | Freshness, coverage, alerts | A | 5d | **M2.1, M2.3, M2.4 (fetch half) done**; M2.5–M2.7 open |
 | M3 | Commit and wire Part 6 | A | 2d | **done** |
 | M4 | Part 3, Company Intelligence | B | 15–20d | eleven downstream features |
 | M5 | Track and Network completions | A/B | 5d | |
@@ -225,6 +226,21 @@ spec's entire argument that speed is worth optimising.
 
 **Exit criteria for M2.3.** You learn a Jane Street posting opened without opening the
 app.
+
+**Done, 5 Sep 2026 — one step left, and it is yours.** The whole path runs: the
+diff comes free from `first_seen_at` against the previous run's `started_at`
+in `ingest_runs`, the filters cut a real run from 102 new postings to 4, the
+digest is one message carrying score, what the score was computed from, cycle,
+location, gap terms and a direct link, and it fires automatically after a
+successful ingest without being able to break it. Verified end to end, SMTP
+included, against a real socket.
+
+**It will not mail you until you set `LIGHTHOUSE_ALERT_EMAIL_TO` and
+`LIGHTHOUSE_SMTP_HOST`** (see `.env.example`). Until then it says so rather
+than failing quietly. See exactly what would be sent, with no account and no
+mail, using `python -m lighthouse.cli alerts --dry-run`.
+
+Desktop notification is still unbuilt and still the nice second.
 
 ## M2.4 Description coverage
 

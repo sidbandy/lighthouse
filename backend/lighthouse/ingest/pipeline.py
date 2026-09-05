@@ -588,4 +588,29 @@ def run_ingest(
 
     _close_run(run_id, run_session_factory, report=report)
     logger.info("ingest complete: %s | %s", report.summary(), dedup_stats(len(all_rows), merged))
+    _alert_on_new(session, run_id)
     return report
+
+
+def _alert_on_new(session: Session, run_id: uuid.UUID | None) -> None:
+    """Tell the operator about anything new worth knowing about.
+
+    After the run rather than inside it: the postings have to exist before they
+    can be selected, and a failure here must not touch what the run wrote. The
+    cutoff is the *previous* run's start, which the run record already holds --
+    this run's own row is excluded by asking for the one before it.
+
+    Swallows everything. Alerting is a convenience riding on the freshness
+    pipeline, and the pipeline is the thing that matters.
+    """
+    try:
+        from ..alerts import previous_run_start, run_alert
+
+        this_run = session.get(IngestRun, run_id) if run_id else None
+        since = previous_run_start(
+            session, before=this_run.started_at if this_run else datetime.now(UTC)
+        )
+        result = run_alert(session, since=since)
+        logger.info("alerts: %d candidates, %s", result.count, result.delivered.reason)
+    except Exception:  # pragma: no cover - alerting must never break a run
+        logger.exception("alerting failed after a successful ingest")

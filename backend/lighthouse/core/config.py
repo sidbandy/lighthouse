@@ -101,6 +101,31 @@ class Settings(BaseSettings):
     # 16 kHz mono 16-bit is ~1.9 MB a minute, so this is roughly eight minutes.
     max_audio_bytes: int = 16_000_000
 
+    # New-posting alerts. Off unless a recipient is configured, because the
+    # failure mode of a half-configured alerter is silence that looks like
+    # "nothing new" -- exactly the thing alerts exist to prevent.
+    alert_email_to: str = ""
+    alert_email_from: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = True
+
+    # Only postings scoring at least this are worth interrupting someone for.
+    # Deliberately not zero: an alert that fires on everything is an alert
+    # nobody reads, and the list is still there in Discover either way.
+    alert_min_match: int = 30
+    # Ghost buckets never worth an alert. A posting the checklist already calls
+    # likely stale does not become worth chasing by being new.
+    alert_skip_ghost: tuple[str, ...] = ("likely_stale",)
+    # A burst from one source becomes one message, not forty.
+    alert_max_items: int = 25
+
+    @property
+    def alerts_configured(self) -> bool:
+        return bool(self.alert_email_to and self.smtp_host)
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -51,6 +51,11 @@ class PostingFilters:
     include_unknown_term: bool = True
     applyable_only: bool = True
     posted_within_days: int | None = None
+    # When Lighthouse first saw the row, not when the employer posted it. The
+    # run-over-run diff behind alerts is a question about our own record --
+    # `posted_at` is often missing and often wrong, and a posting that appeared
+    # on a new feed today is new to the operator whatever date it carries.
+    first_seen_after: datetime | None = None
 
     limit: int = 50
     offset: int = 0
@@ -116,6 +121,9 @@ def _apply_filters(stmt: Select, filters: PostingFilters, today: date) -> Select
     if filters.posted_within_days is not None:
         cutoff = datetime.now(UTC) - timedelta(days=filters.posted_within_days)
         stmt = stmt.where(Posting.posted_at >= cutoff)
+
+    if filters.first_seen_after is not None:
+        stmt = stmt.where(Posting.first_seen_at > filters.first_seen_after)
 
     if filters.search:
         pattern = f"%{filters.search.strip()}%"

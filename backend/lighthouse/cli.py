@@ -8,6 +8,7 @@ the frontend is still being built and for scheduled runs.
     python -m lighthouse.cli sources
     python -m lighthouse.cli cycles
     python -m lighthouse.cli runs
+    python -m lighthouse.cli alerts --dry-run
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 
@@ -201,6 +202,35 @@ def cmd_runs(args: argparse.Namespace) -> int:
     return 1 if unfinished else 0
 
 
+def cmd_alerts(args: argparse.Namespace) -> int:
+    """Show, and optionally send, what the last run would alert on.
+
+    ``--dry-run`` renders the digest without sending it and without needing an
+    SMTP account, which is the only way to see what the filters actually let
+    through before trusting them with an inbox.
+    """
+    from .alerts import previous_run_start, run_alert
+    from .alerts.delivery import CaptureTransport
+
+    with session_scope() as session:
+        since = args.since or previous_run_start(session)
+        transport = CaptureTransport() if args.dry_run else None
+        result = run_alert(session, since=since, transport=transport)
+
+    if since is None:
+        print("No previous ingest run to compare against, so nothing is 'new' yet.")
+        print("Run an ingest, then run this again.")
+        return 0
+
+    print(f"since:      {since:%Y-%m-%d %H:%M:%S}")
+    print(f"candidates: {result.count}")
+    print(f"delivery:   {result.delivered.reason}\n")
+    if result.body:
+        print(f"subject: {result.subject}\n")
+        print(result.body)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lighthouse", description=__doc__)
     parser.add_argument(
@@ -254,6 +284,20 @@ def build_parser() -> argparse.ArgumentParser:
     runs = sub.add_parser("runs", help="Show recent ingest runs and whether they finished.")
     runs.add_argument("--limit", type=int, default=10, help="How many runs to show.")
     runs.set_defaults(func=cmd_runs)
+
+    alerts = sub.add_parser("alerts", help="Show what the last ingest would alert on.")
+    alerts.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Render the digest without sending it. Needs no SMTP account.",
+    )
+    alerts.add_argument(
+        "--since",
+        type=lambda v: datetime.strptime(v, "%Y-%m-%d").replace(tzinfo=UTC),
+        default=None,
+        help="Override the cutoff (YYYY-MM-DD). Defaults to the previous run.",
+    )
+    alerts.set_defaults(func=cmd_alerts)
 
     return parser
 
