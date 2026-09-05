@@ -69,11 +69,18 @@ export function PostingCard({
       <div className="mt-3 pt-2 border-t border-navy-100 flex items-center gap-2 flex-wrap text-2xs text-navy-400">
         <span
           className={posting.term_label ? "font-600 text-navy-600" : "italic"}
-          title={`term ${termRuleLabel(posting.term_rule)}`}
+          title={
+            posting.term_label
+              ? `Cycle ${termRuleLabel(posting.term_rule)}`
+              : "No source stated a cycle, and none could be inferred"
+          }
         >
           {posting.term_label ?? "term unknown"}
         </span>
-        <span>{termRuleLabel(posting.term_rule)}</span>
+        {/* How we know -- shown only when there is a term to know something
+            about. The rule label for an unresolved cycle is "term unknown"
+            too, so rendering both printed it twice and read as a fault. */}
+        {posting.term_label && <span>{termRuleLabel(posting.term_rule)}</span>}
         {sponsorship && <span className="text-warn">{sponsorship}</span>}
         <span className="ml-auto flex items-center gap-2">
           {posting.location_labels[0] && <span>{posting.location_labels[0]}</span>}

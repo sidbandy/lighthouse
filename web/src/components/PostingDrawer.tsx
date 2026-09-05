@@ -95,13 +95,19 @@ function DrawerBody({
 
       <div className="flex flex-wrap gap-1.5">
         {posting.term_label ? (
-          <span className="chip border-beacon-500/30 text-beacon-600">{posting.term_label}</span>
+          <>
+            <span className="chip border-beacon-500/30 text-beacon-600">{posting.term_label}</span>
+            <span className="chip" title="How the cycle was determined">
+              {termRuleLabel(posting.term_rule)}
+            </span>
+          </>
         ) : (
-          <span className="chip">term unknown</span>
+          // One chip, not two: the rule label for an unresolved cycle is also
+          // "term unknown", so the pair read as a rendering fault.
+          <span className="chip" title="No source stated a cycle, and none could be inferred">
+            term unknown
+          </span>
         )}
-        <span className="chip" title="How the cycle was determined">
-          {termRuleLabel(posting.term_rule)}
-        </span>
         {posting.location_labels.map((l) => (
           <span key={l} className="chip">
             {l}

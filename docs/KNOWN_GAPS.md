@@ -61,6 +61,18 @@ and Akamai-gated and has no connector.
 carry descriptions for those employers. Either is a real piece of work. Until
 then the Safety lane is populated from title-only rows and says so.
 
+### One lane can be dominated by a single company — `misleading`
+
+Only ~6% of active postings carry a description, and the Target lane needs one
+before it will call a match realistic. So Target draws from a pool of a few
+hundred rather than ~13,000, and on a live run five of its six cards were the
+same employer. Nothing is wrong with the ranking; the pool is just too small
+for it to mean anything yet.
+
+**Fix:** description coverage — the on-demand fetch and a Workday connector.
+This entry disappears on its own when that lands, and it is worth re-reading
+the lane afterwards rather than assuming it is fixed.
+
 ### Near-duplicate reqs from one employer crowd a lane — `cosmetic`
 
 Red Bull posts ~730 near-identical "Sales Trainee" rows across locations, and

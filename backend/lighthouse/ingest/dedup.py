@@ -214,7 +214,43 @@ def deduplicate(postings: list[RawPosting]) -> list[MergedPosting]:
             else:
                 groups.append(MergedPosting(primary=posting, members=[posting]))
         merged.extend(groups)
-    return merged
+    return _fold_shared_urls(merged)
+
+
+def _fold_shared_urls(merged: list[MergedPosting]) -> list[MergedPosting]:
+    """Rule 3, applied across company blocks as well as within them.
+
+    Blocking by company is what keeps dedup linear, but it means two spellings
+    of one employer are never compared. Akuna lists the same job as "Akuna
+    Capital" on some feeds and "Akuna Capital University" on others, so one
+    role -- one URL, one ``gh_jid`` -- became two postings, two cards in a
+    lane, and two rows racing for a column the database says is unique.
+    Measured live before this existed: 59 URLs claimed twice in a single run.
+
+    Only the URL crosses the block. A canonical URL *is* the posting's
+    identity, which is exactly what the unique index on ``postings.canonical_url``
+    asserts, so this adds no judgement -- nothing fuzzy, no title comparison,
+    no company-name guessing. Two rows that merely look alike at differently
+    spelled companies still stay apart.
+
+    The first group to claim a URL keeps its primary. Blocks are walked in
+    sorted company order, so which one that is stays stable run to run, which
+    the new-posting diff depends on.
+    """
+    by_url: dict[str, MergedPosting] = {}
+    folded: list[MergedPosting] = []
+    for group in merged:
+        url = group.canonical_url
+        if not url:
+            folded.append(group)
+            continue
+        winner = by_url.get(url)
+        if winner is None:
+            by_url[url] = group
+            folded.append(group)
+        else:
+            winner.members.extend(group.members)
+    return folded
 
 
 def dedup_stats(raw_count: int, merged: list[MergedPosting]) -> dict[str, int]:

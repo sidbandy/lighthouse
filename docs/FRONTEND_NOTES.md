@@ -69,9 +69,17 @@ one).
 
 ### Mobile
 
-Untouched. The lanes and the board are both multi-column and will be unusable
-on a phone. Probably not worth solving until someone actually wants it, but
-worth knowing it does not work rather than discovering it in front of a friend.
+**The masthead is fixed; the dense pages are not yet audited.** The header used
+to lay seven nav links, the cycle chips and two controls in one non-wrapping
+row, which needed ~950px and made the whole page scroll sideways at 390px --
+measured at 1,079px of content in a 390px viewport. Below `lg` the links now
+move into a menu, and the cycle counts and refresh go with them.
+
+Every route now fits 390px with no horizontal scroll, checked in a real
+browser. What has *not* been done is reading the dense pages at that width for
+whether they are pleasant rather than merely contained: the three Discover
+lanes stack into one long column, and the application board's columns will do
+the same. Worth an actual look on a phone before the next round of applying.
 
 ---
 
